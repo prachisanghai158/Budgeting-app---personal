@@ -343,10 +343,17 @@ function stats(who='H'){
 function sCalc(){
   const ex=mExps(),pr=D.splitRatio.P/100;
   let pF=0,sF=0,pP=0,sP=0;
+  // regular expenses
   ex.forEach(e=>{
     pF+=e.amt*(e.sp/100);sF+=e.amt*(e.ss/100);
     if(e.pb==='P')pP+=e.amt;else if(e.pb==='S')sP+=e.amt;
     else{pP+=e.amt*pr;sP+=e.amt*(1-pr);}
+  });
+  // recurring expenses active this month
+  (D.recurring||[]).filter(recActive).forEach(r=>{
+    pF+=r.amt*(r.sp/100);sF+=r.amt*(r.ss/100);
+    if(r.pb==='P')pP+=r.amt;else if(r.pb==='S')sP+=r.amt;
+    else{pP+=r.amt*pr;sP+=r.amt*(1-pr);}
   });
   return{pF,sF,pP,sP,net:Math.round(pP-pF)};
 }
@@ -578,10 +585,29 @@ function rLoans(){
 
 function rSettle(){
   const s=sCalc(),ower=s.net>0?D.names.S:D.names.P,payee=s.net>0?D.names.P:D.names.S,amt=Math.abs(s.net);
+  const recAmt=recTotal('H');
+  const expAmt=(mExps()||[]).reduce((a,e)=>a+e.amt,0);
   let h=`<div class="sc"><div style="font-size:13px;color:var(--muted)">${ower} owes ${payee}</div><div class="samt">${fmt(amt)}</div><div style="font-size:12px;color:var(--muted)">${MF[cm.m]} ${cm.y}</div></div>
   <div class="card"><div class="ctitle">Breakdown</div>
-  <div class="ms" style="margin-bottom:10px"><div class="ms-item"><div class="ms-lbl">${D.names.P} paid</div><div class="ms-val">${fmt(s.pP)}</div></div><div class="ms-item"><div class="ms-lbl">${D.names.S} paid</div><div class="ms-val">${fmt(s.sP)}</div></div><div class="ms-item"><div class="ms-lbl">Total</div><div class="ms-val">${fmt(s.pP+s.sP)}</div></div></div>
-  <div class="ms"><div class="ms-item"><div class="ms-lbl">${D.names.P} share</div><div class="ms-val">${fmt(s.pF)}</div></div><div class="ms-item"><div class="ms-lbl">${D.names.S} share</div><div class="ms-val">${fmt(s.sF)}</div></div><div class="ms-item" style="background:rgba(28,201,142,.08)"><div class="ms-lbl">Ratio</div><div class="ms-val gv">${D.splitRatio.P}:${D.splitRatio.S}</div></div></div></div>
+  <div class="ms" style="margin-bottom:10px">
+    <div class="ms-item"><div class="ms-lbl">${D.names.P} paid</div><div class="ms-val">${fmt(s.pP)}</div></div>
+    <div class="ms-item"><div class="ms-lbl">${D.names.S} paid</div><div class="ms-val">${fmt(s.sP)}</div></div>
+    <div class="ms-item"><div class="ms-lbl">Total</div><div class="ms-val">${fmt(s.pP+s.sP)}</div></div>
+  </div>
+  <div class="ms" style="margin-bottom:10px">
+    <div class="ms-item"><div class="ms-lbl">${D.names.P} share</div><div class="ms-val">${fmt(s.pF)}</div></div>
+    <div class="ms-item"><div class="ms-lbl">${D.names.S} share</div><div class="ms-val">${fmt(s.sF)}</div></div>
+    <div class="ms-item" style="background:rgba(28,201,142,.08)"><div class="ms-lbl">Ratio</div><div class="ms-val gv">${D.splitRatio.P}:${D.splitRatio.S}</div></div>
+  </div>
+  <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+      <span>Expenses</span><span style="font-family:'DM Mono',monospace">${fmt(expAmt)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+      <span>🔁 Recurring (included)</span><span style="font-family:'DM Mono',monospace;color:var(--amber)">${fmt(recAmt)}</span>
+    </div>
+  </div>
+  </div>
   <button onclick="markSettled()" class="sbtn" style="margin-bottom:10px">✓ Mark as settled</button>`;
   if((D.settlements||[]).length){h+=`<div class="card"><div class="ctitle">History</div>`;D.settlements.slice().reverse().forEach(s=>{h+=`<div class="eitem"><div class="einfo"><div class="ename">${s.from} → ${s.to}</div><div class="emeta">${s.date}</div></div><div class="eright"><div class="eamt gv">${fmt(s.amt)}</div></div></div>`;});h+='</div>';}
   return h;
