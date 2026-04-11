@@ -98,32 +98,23 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;backgroun
 .dlbl{font-size:11px;color:var(--muted);margin:10px 0 5px;text-transform:uppercase;letter-spacing:.06em}
 .dashaddbtn{width:100%;padding:11px;background:var(--bg3);border:1px dashed var(--border);border-radius:var(--r2);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;margin-bottom:10px}
 .toast{position:fixed;bottom:calc(80px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:10px 18px;font-size:13px;z-index:500;white-space:nowrap;pointer-events:none}
-.setup-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center}
-.setup-logo{font-size:48px;margin-bottom:16px}
-.setup-title{font-size:22px;font-weight:600;margin-bottom:8px}
-.setup-sub{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:28px}
-.setup-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:13px 14px;color:var(--text);font-size:15px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:10px;text-align:center}
-.setup-input:focus{border-color:var(--p)}
-.setup-input::placeholder{color:var(--muted)}
-.setup-help{font-size:11px;color:var(--muted);margin-bottom:20px;line-height:1.6}
-.setup-help a{color:var(--s)}
+/* subcategory styles */
+.cat-row{display:flex;align-items:center;padding:9px 0;cursor:pointer;border-bottom:1px solid var(--border);gap:8px}
+.cat-row:last-of-type{border-bottom:none}
+.cat-row-inner{flex:1;min-width:0}
+.cat-chevron{font-size:10px;color:var(--muted);transition:transform .2s;flex-shrink:0}
+.cat-chevron.open{transform:rotate(90deg)}
+.subcat-panel{display:none;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.subcat-panel.open{display:block}
+.subcat-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0 5px 42px;border-bottom:1px solid rgba(255,255,255,.04)}
+.subcat-row:last-child{border-bottom:none}
+.subcat-bar-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px}
+.subcat-bar-label span:first-child{color:var(--muted)}
+.subcat-track{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:6px}
+.subcat-fill{height:100%;border-radius:2px}
 </style>
 </head>
 <body>
-
-<!-- Setup screen shown on first launch -->
-<div class="setup-screen" id="setup" style="display:none">
-  <div class="setup-logo">💰</div>
-  <div class="setup-title">P&S Budget</div>
-  <div class="setup-sub">To sync between your phones, this app uses a free Firebase database. Enter your Firebase URL below — both phones must use the same URL.</div>
-  <input class="setup-input" id="fburl" placeholder="https://your-app-default-rtdb.firebaseio.com" type="url" autocomplete="off" autocapitalize="none">
-  <div class="setup-help">
-    Get a free URL at <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a><br>
-    Create project → Realtime Database → Start in test mode → copy the URL
-  </div>
-  <button class="sbtn" style="max-width:320px" onclick="saveFirebaseUrl()">Save & Start</button>
-</div>
-
 <div class="app" id="app">
   <div class="topbar">
     <div class="topbar-row">
@@ -143,7 +134,6 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;backgroun
       <span style="font-size:11px;color:var(--s);cursor:pointer;text-decoration:underline" onclick="pullLatest()">🔄 Refresh</span>
     </div>
   </div>
-
   <div class="hero">
     <div class="hero-top">
       <div><div class="hlbl">Household inflow</div><div class="hval" id="h-inflow">₹0</div></div>
@@ -156,7 +146,6 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;backgroun
       <div class="ms-item"><div class="ms-lbl">Shortfall</div><div class="ms-val av" id="h-sf">₹0</div></div>
     </div>
   </div>
-
   <div class="tabs">
     <button class="tab active" onclick="showTab('exp',this)">Expenses</button>
     <button class="tab" onclick="showTab('budget',this)">Budget</button>
@@ -166,10 +155,8 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;backgroun
     <button class="tab" onclick="showTab('trends',this)">Trends</button>
     <button class="tab" onclick="showTab('settings',this)">Settings</button>
   </div>
-
   <div class="content" id="content"></div>
   <button class="fab" id="fab" onclick="openFab()">+</button>
-
   <div class="bnav">
     <button class="nbtn active" onclick="showTab('exp',null);setNA(this)"><span class="nicon">💸</span>Expenses</button>
     <button class="nbtn" onclick="showTab('budget',null);setNA(this)"><span class="nicon">🎯</span>Budget</button>
@@ -178,48 +165,41 @@ html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;backgroun
     <button class="nbtn" onclick="showTab('settle',null);setNA(this)"><span class="nicon">🤝</span>Settle</button>
   </div>
 </div>
-
 <div class="overlay" id="modal" style="display:none" onclick="if(event.target===this)closeM()">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtitle" id="mtitle"></div>
-    <div id="mbody"></div>
-  </div>
+  <div class="modal"><div class="mhandle"></div><div class="mtitle" id="mtitle"></div><div id="mbody"></div></div>
 </div>
-
 <div class="toast" id="toast" style="display:none"></div>
-
 <script>
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MF=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SWATCHES=['#1CC98E','#4A9EFF','#FFB547','#FF7EB3','#A78BFA','#FB923C','#FF5B5B','#60A5FA','#34D399','#F59E0B','#E879F9','#F87171'];
 const EMOJIS=['🛒','🍽️','🚗','💊','🎬','🛍️','📦','🏠','⚡','📱','👤','✈️','🍕','☕','💄','🐕','📚','🎮','🏋️','🎵','🏖️','🎁','💻','🔧','👶','🧴','🌿','🍷','🎯'];
-
 const fmt=n=>'₹'+Math.round(n).toLocaleString('en-IN');
 const uid=()=>Math.random().toString(36).slice(2,9);
 const today=()=>new Date().toISOString().split('T')[0];
-const gCat=id=>(D.categories||[]).find(c=>c.id===id)||{n:id,i:'📌',c:'#8890AA'};
+const gCat=id=>(D.categories||[]).find(c=>c.id===id)||{n:id,i:'📌',c:'#8890AA',subs:[]};
+const gSub=(catId,subId)=>(gCat(catId).subs||[]).find(s=>s.id===subId)||null;
 
-let cu='P', ctab='exp', cm={y:new Date().getFullYear(),m:new Date().getMonth()};
-let FB_URL = 'https://budgeting-9de34-default-rtdb.firebaseio.com';
+let cu='P',ctab='exp',cm={y:new Date().getFullYear(),m:new Date().getMonth()};
+let FB_URL='https://budgeting-9de34-default-rtdb.firebaseio.com';
+let expandedCats={};
 
-// ── DEFAULT DATA ──────────────────────────────
-let D = {
+let D={
   names:{P:'Prachi',S:'Shourya'},
   inflows:{P:225000,S:382500},
   invTargets:{P:125064,S:266274},
   prepTarget:30000,
   splitRatio:{P:37,S:63},
   categories:[
-    {id:'groceries',n:'Groceries',i:'🛒',c:'#1CC98E'},
-    {id:'food',n:'Food & Dining',i:'🍽️',c:'#4A9EFF'},
-    {id:'transport',n:'Transport',i:'🚗',c:'#FFB547'},
-    {id:'health',n:'Health',i:'💊',c:'#FF7EB3'},
-    {id:'entertainment',n:'Entertainment',i:'🎬',c:'#A78BFA'},
-    {id:'shopping',n:'Shopping',i:'🛍️',c:'#FB923C'},
-    {id:'misc',n:'Miscellaneous',i:'📦',c:'#8890AA'},
-    {id:'subs',n:'Subscriptions',i:'📱',c:'#A78BFA'},
-    {id:'personal',n:'Personal',i:'👤',c:'#60A5FA'},
+    {id:'groceries',n:'Groceries',i:'🛒',c:'#1CC98E',subs:[{id:'g1',n:'Vegetables & Fruits'},{id:'g2',n:'Dairy'},{id:'g3',n:'Grocery Delivery'}]},
+    {id:'food',n:'Food & Dining',i:'🍽️',c:'#4A9EFF',subs:[{id:'f1',n:'Restaurants'},{id:'f2',n:'Food Delivery'},{id:'f3',n:'Coffee & Snacks'}]},
+    {id:'transport',n:'Transport',i:'🚗',c:'#FFB547',subs:[{id:'t1',n:'Cab / Auto'},{id:'t2',n:'Fuel'},{id:'t3',n:'Parking'}]},
+    {id:'health',n:'Health',i:'💊',c:'#FF7EB3',subs:[{id:'h1',n:'Medicine'},{id:'h2',n:'Doctor / Lab'},{id:'h3',n:'Gym & Fitness'}]},
+    {id:'entertainment',n:'Entertainment',i:'🎬',c:'#A78BFA',subs:[{id:'e1',n:'Movies & Events'},{id:'e2',n:'Hobbies'}]},
+    {id:'shopping',n:'Shopping',i:'🛍️',c:'#FB923C',subs:[{id:'s1',n:'Clothes'},{id:'s2',n:'Electronics'},{id:'s3',n:'Home & Decor'}]},
+    {id:'misc',n:'Miscellaneous',i:'📦',c:'#8890AA',subs:[]},
+    {id:'subs',n:'Subscriptions',i:'📱',c:'#A78BFA',subs:[{id:'su1',n:'Streaming'},{id:'su2',n:'Apps & Software'}]},
+    {id:'personal',n:'Personal',i:'👤',c:'#60A5FA',subs:[{id:'p1',n:'Grooming'},{id:'p2',n:'Clothing'}]},
   ],
   expenses:[],
   investments:[
@@ -246,30 +226,18 @@ let D = {
   settlements:[]
 };
 
-// ── FIREBASE SYNC ────────────────────────────
+// ── SYNC ─────────────────────────────────────
 function setSyncStatus(s,msg){
-  const el=document.getElementById('syncst');
-  if(!el)return;
+  const el=document.getElementById('syncst');if(!el)return;
   const icons={ok:'☁️',saving:'⏳',error:'⚠️',offline:'📵'};
   el.textContent=(icons[s]||'☁️')+' '+(msg||'');
   el.style.color=s==='error'?'var(--red)':s==='saving'?'var(--amber)':'var(--p)';
 }
-
-function saveFirebaseUrl(){
-  const v=document.getElementById('fburl').value.trim().replace(/\/$/,'');
-  if(!v.includes('firebaseio.com')&&!v.includes('firebasedatabase')){toast('Please enter a valid Firebase URL');return;}
-  localStorage.setItem('psb-fburl',v);
-  FB_URL=v;
-  document.getElementById('setup').style.display='none';
-  init();
-}
-
+function migrate(data){if(data.categories)data.categories.forEach(c=>{if(!c.subs)c.subs=[];});return data;}
 let syncTO=null;
 async function save(){
   try{localStorage.setItem('psb2',JSON.stringify(D));}catch(e){}
-  if(!FB_URL){setSyncStatus('offline','No sync URL');return;}
-  clearTimeout(syncTO);
-  setSyncStatus('saving','Syncing…');
+  clearTimeout(syncTO);setSyncStatus('saving','Syncing…');
   syncTO=setTimeout(async()=>{
     try{
       const r=await fetch(FB_URL+'/psbudget.json',{method:'PUT',body:JSON.stringify({...D,_t:Date.now()}),headers:{'Content-Type':'application/json'}});
@@ -277,39 +245,30 @@ async function save(){
     }catch(e){setSyncStatus('error','Offline');}
   },800);
 }
-
 async function load(){
-  try{const v=localStorage.getItem('psb2');if(v){D=JSON.parse(v);}}catch(e){}
-  if(!FB_URL){setSyncStatus('offline','Local only');return;}
+  try{const v=localStorage.getItem('psb2');if(v){D=migrate(JSON.parse(v));}}catch(e){}
   try{
     setSyncStatus('saving','Loading…');
     const r=await fetch(FB_URL+'/psbudget.json');
     if(r.ok){
       const cloud=await r.json();
       if(cloud&&cloud.expenses){
-        const localT=(D._t)||0;
-        if(!localT||(cloud._t||0)>=localT){
-          const{_t,...data}=cloud;
-          D={...data};
-          try{localStorage.setItem('psb2',JSON.stringify(D));}catch(e){}
-        }
+        const localT=D._t||0;
+        if(!localT||(cloud._t||0)>=localT){const{_t,...data}=cloud;D=migrate(data);try{localStorage.setItem('psb2',JSON.stringify(D));}catch(e){}}
       }
     }
     setSyncStatus('ok','Synced');
   }catch(e){setSyncStatus('offline','Local only');}
 }
-
 async function pullLatest(){
-  if(!FB_URL){toast('No Firebase URL set. Go to Settings → Sync Setup.');return;}
   setSyncStatus('saving','Refreshing…');
   try{
     const r=await fetch(FB_URL+'/psbudget.json');
     if(r.ok){
       const cloud=await r.json();
       if(cloud&&cloud.expenses){
-        if(!confirm('Refresh data from cloud? Any unsynced local changes will be overwritten.'))return;
-        const{_t,...data}=cloud;
-        D={...data};
+        if(!confirm('Refresh data from cloud?'))return;
+        const{_t,...data}=cloud;D=migrate(data);
         try{localStorage.setItem('psb2',JSON.stringify(D));}catch(e){}
         render();toast('Refreshed ✓');
       }
@@ -319,14 +278,10 @@ async function pullLatest(){
 }
 
 // ── COMPUTED ──────────────────────────────────
-function mExps(){
-  const k=cm.y+'-'+String(cm.m+1).padStart(2,'0');
-  return (D.expenses||[]).filter(e=>e.date&&e.date.startsWith(k));
-}
+function mExps(){const k=cm.y+'-'+String(cm.m+1).padStart(2,'0');return(D.expenses||[]).filter(e=>e.date&&e.date.startsWith(k));}
 function stats(){
   const ex=mExps(),te=ex.reduce((a,e)=>a+e.amt,0),ti=D.inflows.P+D.inflows.S;
-  const inv=(D.investments||[]).reduce((a,i)=>a+i.amt,0);
-  const tgt=D.invTargets.P+D.invTargets.S+D.prepTarget;
+  const inv=(D.investments||[]).reduce((a,i)=>a+i.amt,0),tgt=D.invTargets.P+D.invTargets.S+D.prepTarget;
   return{te,ti,inv,tgt,sf:Math.max(0,tgt-inv),sr:ti>0?Math.round(inv/ti*100):0};
 }
 function sCalc(){
@@ -338,6 +293,11 @@ function sCalc(){
     else{pP+=e.amt*pr;sP+=e.amt*(1-pr);}
   });
   return{pF,sF,pP,sP,net:Math.round(pP-pF)};
+}
+function subTotals(catId,exps){
+  const t={};
+  exps.filter(e=>e.cat===catId).forEach(e=>{const k=e.subcat||'__none';t[k]=(t[k]||0)+e.amt;});
+  return t;
 }
 
 // ── HERO ─────────────────────────────────────
@@ -353,19 +313,15 @@ function updHero(){
   document.getElementById('bp').textContent=D.names.P;
   document.getElementById('bs').textContent=D.names.S;
 }
-
-function showTab(t,el){
-  ctab=t;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  if(el)el.classList.add('active');
-  document.getElementById('fab').style.display={exp:1,invest:1,loans:1}[t]?'flex':'none';
-  render();
-}
+function showTab(t,el){ctab=t;document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('fab').style.display={exp:1,invest:1,loans:1}[t]?'flex':'none';render();}
 function setNA(b){document.querySelectorAll('.nbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');}
-function render(){
-  updHero();
-  const fn={exp:rExp,budget:rBudget,invest:rInvest,loans:rLoans,settle:rSettle,trends:rTrends,settings:rSettings};
-  document.getElementById('content').innerHTML=(fn[ctab]||rExp)();
+function render(){updHero();const fn={exp:rExp,budget:rBudget,invest:rInvest,loans:rLoans,settle:rSettle,trends:rTrends,settings:rSettings};document.getElementById('content').innerHTML=(fn[ctab]||rExp)();}
+function toggleCat(key){
+  expandedCats[key]=!expandedCats[key];
+  const chev=document.getElementById('chev-'+key);
+  const panel=document.getElementById('panel-'+key);
+  if(chev)chev.classList.toggle('open',expandedCats[key]);
+  if(panel)panel.classList.toggle('open',expandedCats[key]);
 }
 
 // ── RENDERERS ─────────────────────────────────
@@ -378,21 +334,49 @@ function rExp(){
     const dt=new Date(date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
     h+=`<div style="display:flex;justify-content:space-between;margin:10px 0 5px"><span class="dlbl" style="margin:0">${dt}</span><span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${fmt(grp[date].reduce((a,e)=>a+e.amt,0))}</span></div><div class="card" style="padding:4px 12px">`;
     grp[date].forEach(e=>{
-      const ci=gCat(e.cat),wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
-      h+=`<div class="eitem" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${ci.c}22">${ci.i}</div><div class="einfo"><div class="ename">${e.d}</div><div class="emeta">${ci.n} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div><div class="eright"><div class="eamt">${fmt(e.amt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
+      const ci=gCat(e.cat),sub=e.subcat?gSub(e.cat,e.subcat):null;
+      const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
+      const meta=sub?`${ci.n} › ${sub.n}`:ci.n;
+      h+=`<div class="eitem" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${ci.c}22">${ci.i}</div><div class="einfo"><div class="ename">${e.d}</div><div class="emeta">${meta} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div><div class="eright"><div class="eamt">${fmt(e.amt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
     });
     h+='</div>';
   });
   return h;
 }
 
+function catExpandRow(key,ci,labelHtml,isOpen){
+  return`<div class="cat-row" onclick="toggleCat('${key}')">
+    <span style="font-size:18px">${ci.i}</span>
+    <div class="cat-row-inner">${labelHtml}</div>
+    <span class="cat-chevron${isOpen?' open':''}" id="chev-${key}">▶</span>
+  </div>`;
+}
+
 function rBudget(){
   const exps=mExps();
   let h=`<div class="card"><div class="ctitle">Budget vs Actual<span class="ctitle-edit" onclick="openBudgetEdit()">Edit</span></div>`;
   (D.budgets||[]).forEach(b=>{
-    const ci=gCat(b.cat),spent=exps.filter(e=>e.cat===b.cat).reduce((a,e)=>a+e.amt,0);
+    const ci=gCat(b.cat),catExps=exps.filter(e=>e.cat===b.cat);
+    const spent=catExps.reduce((a,e)=>a+e.amt,0);
     const pct=Math.min(Math.round(spent/b.b*100),100),over=spent>b.b;
-    h+=`<div class="cbar-wrap"><div class="cbar-label"><span>${ci.i} ${ci.n}</span><span style="color:${over?'var(--red)':'inherit'}">${fmt(spent)} / ${fmt(b.b)}</span></div><div class="ctrack"><div class="cbar" style="width:${pct}%;background:${over?'var(--red)':pct>75?'var(--amber)':ci.c}"></div></div></div>`;
+    const barColor=over?'var(--red)':pct>75?'var(--amber)':ci.c;
+    const key='b-'+b.cat,isOpen=!!expandedCats[key];
+    const subs=ci.subs||[],st=subTotals(b.cat,exps);
+    const hasSubs=subs.length>0||st['__none']>0;
+    const labelHtml=`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--muted)">${ci.n}</span><span style="color:${over?'var(--red)':'inherit'}">${fmt(spent)} / ${fmt(b.b)}</span></div><div class="ctrack"><div class="cbar" style="width:${pct}%;background:${barColor}"></div></div>`;
+    if(hasSubs){
+      h+=catExpandRow(key,ci,labelHtml,isOpen);
+      h+=`<div class="subcat-panel${isOpen?' open':''}" id="panel-${key}">`;
+      subs.forEach(s=>{
+        const sv=st[s.id]||0;if(!sv&&!isOpen)return;
+        const sp2=spent>0?Math.min(Math.round(sv/spent*100),100):0;
+        h+=`<div class="subcat-row"><div style="flex:1;min-width:0"><div class="subcat-bar-label"><span>${s.n}</span><span>${fmt(sv)}</span></div><div class="subcat-track"><div class="subcat-fill" style="width:${sp2}%;background:${ci.c}88"></div></div></div></div>`;
+      });
+      if(st['__none']){const sp2=spent>0?Math.min(Math.round(st['__none']/spent*100),100):0;h+=`<div class="subcat-row"><div style="flex:1;min-width:0"><div class="subcat-bar-label"><span style="color:var(--muted)">Other</span><span>${fmt(st['__none'])}</span></div><div class="subcat-track"><div class="subcat-fill" style="width:${sp2}%;background:${ci.c}44"></div></div></div></div>`;}
+      h+=`</div>`;
+    } else {
+      h+=`<div style="padding:9px 0;border-bottom:1px solid var(--border)">${labelHtml}</div>`;
+    }
   });
   h+=`</div><div class="card"><div class="ctitle">Recurring<span class="ctitle-edit" onclick="openRecurring()">+ Add</span></div>`;
   (D.recurring||[]).forEach(r=>{
@@ -408,10 +392,7 @@ function rInvest(){
   ['P','S','joint'].forEach(person=>{
     const items=(D.investments||[]).filter(i=>i.p===person);if(!items.length)return;
     h+=`<div class="card"><div class="ctitle">${person==='P'?D.names.P:person==='S'?D.names.S:'Joint'}</div>`;
-    items.forEach(inv=>{
-      const p=Math.round(inv.amt/(inv.tgt||1)*100);
-      h+=`<div class="iitem" onclick="openEditInvest('${inv.id}')"><div><div class="iname">${inv.n}</div><div class="isub">Target: ${fmt(inv.tgt)}</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace">${fmt(inv.amt)}</div><div class="ipct ${inv.amt>=inv.tgt?'okc':'loc'}">${p}%</div></div></div>`;
-    });
+    items.forEach(inv=>{const p=Math.round(inv.amt/(inv.tgt||1)*100);h+=`<div class="iitem" onclick="openEditInvest('${inv.id}')"><div><div class="iname">${inv.n}</div><div class="isub">Target: ${fmt(inv.tgt)}</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace">${fmt(inv.amt)}</div><div class="ipct ${inv.amt>=inv.tgt?'okc':'loc'}">${p}%</div></div></div>`;});
     h+='</div>';
   });
   return h;
@@ -432,11 +413,7 @@ function rSettle(){
   <div class="ms" style="margin-bottom:10px"><div class="ms-item"><div class="ms-lbl">${D.names.P} paid</div><div class="ms-val">${fmt(s.pP)}</div></div><div class="ms-item"><div class="ms-lbl">${D.names.S} paid</div><div class="ms-val">${fmt(s.sP)}</div></div><div class="ms-item"><div class="ms-lbl">Total</div><div class="ms-val">${fmt(s.pP+s.sP)}</div></div></div>
   <div class="ms"><div class="ms-item"><div class="ms-lbl">${D.names.P} share</div><div class="ms-val">${fmt(s.pF)}</div></div><div class="ms-item"><div class="ms-lbl">${D.names.S} share</div><div class="ms-val">${fmt(s.sF)}</div></div><div class="ms-item" style="background:rgba(28,201,142,.08)"><div class="ms-lbl">Ratio</div><div class="ms-val gv">${D.splitRatio.P}:${D.splitRatio.S}</div></div></div></div>
   <button onclick="markSettled()" class="sbtn" style="margin-bottom:10px">✓ Mark as settled</button>`;
-  if((D.settlements||[]).length){
-    h+=`<div class="card"><div class="ctitle">History</div>`;
-    D.settlements.slice().reverse().forEach(s=>{h+=`<div class="eitem"><div class="einfo"><div class="ename">${s.from} → ${s.to}</div><div class="emeta">${s.date}</div></div><div class="eright"><div class="eamt gv">${fmt(s.amt)}</div></div></div>`;});
-    h+='</div>';
-  }
+  if((D.settlements||[]).length){h+=`<div class="card"><div class="ctitle">History</div>`;D.settlements.slice().reverse().forEach(s=>{h+=`<div class="eitem"><div class="einfo"><div class="ename">${s.from} → ${s.to}</div><div class="emeta">${s.date}</div></div><div class="eright"><div class="eamt gv">${fmt(s.amt)}</div></div></div>`;});h+='</div>';}
   return h;
 }
 
@@ -444,10 +421,35 @@ function rTrends(){
   const exps=mExps(),tot={};exps.forEach(e=>{tot[e.cat]=(tot[e.cat]||0)+e.amt;});
   const sorted=Object.entries(tot).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]),mx=sorted[0]?.[1]||1;
   let h=`<div class="card"><div class="ctitle">By Category</div>`;
-  sorted.forEach(([id,val])=>{const ci=gCat(id),over=D.budgets.find(b=>b.cat===id&&val>b.b);h+=`<div class="cbar-wrap"><div class="cbar-label"><span>${ci.i} ${ci.n}</span><span style="color:${over?'var(--red)':'inherit'}">${fmt(val)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.round(val/mx*100)}%;background:${ci.c}"></div></div></div>`;});
+  sorted.forEach(([catId,val])=>{
+    const ci=gCat(catId),over=D.budgets.find(b=>b.cat===catId&&val>b.b);
+    const key='t-'+catId,isOpen=!!expandedCats[key];
+    const subs=ci.subs||[],st=subTotals(catId,exps);
+    const hasSubs=subs.length>0||st['__none']>0;
+    const labelHtml=`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--muted)">${ci.n}</span><span style="color:${over?'var(--red)':'inherit'}">${fmt(val)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.round(val/mx*100)}%;background:${ci.c}"></div></div>`;
+    if(hasSubs){
+      h+=catExpandRow(key,ci,labelHtml,isOpen);
+      h+=`<div class="subcat-panel${isOpen?' open':''}" id="panel-${key}">`;
+      const subEntries=subs.map(s=>({id:s.id,n:s.n,v:st[s.id]||0})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+      if(st['__none'])subEntries.push({id:'__none',n:'Other',v:st['__none']});
+      subEntries.forEach(s=>{
+        const pct=Math.round(s.v/val*100);
+        h+=`<div class="subcat-row">
+          <div style="width:6px;height:6px;border-radius:50%;background:${ci.c};flex-shrink:0;margin-right:8px"></div>
+          <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--muted)">${s.n}</span><span>${fmt(s.v)} <span style="color:var(--muted)">${pct}%</span></span></div></div>
+        </div>`;
+      });
+      h+=`</div>`;
+    } else {
+      h+=`<div style="padding:9px 0;border-bottom:1px solid var(--border)">${labelHtml}</div>`;
+    }
+  });
   h+=`</div>`;
   const pS=exps.reduce((a,e)=>a+e.amt*(e.sp/100),0),sS=exps.reduce((a,e)=>a+e.amt*(e.ss/100),0),t2=(pS+sS)||1;
-  h+=`<div class="card"><div class="ctitle">Fair Share by Person</div><div class="cbar-wrap"><div class="cbar-label"><span>🟢 ${D.names.P}</span><span>${fmt(pS)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.round(pS/t2*100)}%;background:var(--p)"></div></div></div><div class="cbar-wrap"><div class="cbar-label"><span>🔵 ${D.names.S}</span><span>${fmt(sS)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.round(sS/t2*100)}%;background:var(--s)"></div></div></div></div>`;
+  h+=`<div class="card"><div class="ctitle">Fair Share by Person</div>
+    <div class="cbar-wrap"><div class="cbar-label"><span>🟢 ${D.names.P}</span><span>${fmt(pS)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.round(pS/t2*100)}%;background:var(--p)"></div></div></div>
+    <div class="cbar-wrap"><div class="cbar-label"><span>🔵 ${D.names.S}</span><span>${fmt(sS)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.round(sS/t2*100)}%;background:var(--s)"></div></div></div>
+  </div>`;
   const s=stats();
   h+=`<div class="card"><div class="ctitle">Savings Rate — ${s.sr}%</div><div class="cbar-wrap"><div class="cbar-label"><span>Invested / Inflow</span><span>${fmt(s.inv)} / ${fmt(s.ti)}</span></div><div class="ctrack"><div class="cbar" style="width:${Math.min(s.sr,100)}%;background:var(--p)"></div></div></div></div>`;
   return h;
@@ -462,10 +464,10 @@ function rSettings(){
   <div class="eitem"><div class="einfo"><div class="ename">${D.names.S}</div></div><div class="eright"><div class="eamt">${fmt(D.invTargets.S)}</div></div></div>
   <div class="eitem" style="border-bottom:none"><div class="einfo"><div class="ename">Prepayment</div></div><div class="eright"><div class="eamt">${fmt(D.prepTarget)}</div></div></div></div>
   <div class="card"><div class="ctitle">Categories<span class="ctitle-edit" onclick="openAddCat()">+ New</span></div>
-  ${(D.categories||[]).map(c=>`<div class="eitem" onclick="openEditCat('${c.id}')"><div class="eicon" style="background:${c.c}33">${c.i}</div><div class="einfo"><div class="ename">${c.n}</div></div><div style="width:12px;height:12px;border-radius:50%;background:${c.c}"></div></div>`).join('')}
+  ${(D.categories||[]).map(c=>`<div class="eitem" onclick="openEditCat('${c.id}')"><div class="eicon" style="background:${c.c}33">${c.i}</div><div class="einfo"><div class="ename">${c.n}</div><div class="emeta">${(c.subs||[]).length} subcategories</div></div><div style="width:10px;height:10px;border-radius:50%;background:${c.c}"></div></div>`).join('')}
   </div>
-  <div class="card"><div class="ctitle">Cloud Sync<span class="ctitle-edit" onclick="openSyncSetup()">Change URL</span></div>
-  <div class="eitem" style="border-bottom:none"><div class="einfo"><div class="ename" id="fb-url-display" style="font-size:11px;word-break:break-all">${FB_URL||'Not configured'}</div></div></div></div>
+  <div class="card"><div class="ctitle">Cloud Sync<span class="ctitle-edit" onclick="openSyncSetup()">Change</span></div>
+  <div class="eitem" style="border-bottom:none"><div class="einfo"><div style="font-size:11px;color:var(--muted);word-break:break-all" id="fb-url-display">${FB_URL}</div></div></div></div>
   <div class="card"><div class="ctitle">Backup & Export</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="sbtn" style="margin-top:0;font-size:13px" onclick="exportJSON()">⬇ Export JSON</button><button class="xbtn" style="margin-top:0;font-size:13px" onclick="document.getElementById('imp').click()">⬆ Import</button></div>
   <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(this)">
@@ -473,68 +475,53 @@ function rSettings(){
   <div class="card"><div class="ctitle" style="color:var(--red)">Danger Zone</div><button class="dbtn" onclick="clearAll()">Reset all data</button></div>`;
 }
 
-// ── SYNC SETUP MODAL ─────────────────────────
-function openSyncSetup(){
-  showM('Cloud Sync Setup',`
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.7">
-      Enter your Firebase Realtime Database URL. Both phones must use the same URL to stay in sync.
-      <br><br>Get a free URL at <a href="https://console.firebase.google.com" target="_blank" style="color:var(--s)">console.firebase.google.com</a>
-    </div>
-    <div class="fg"><label class="flbl">Firebase Database URL</label>
-    <input class="fi" id="fbu2" value="${FB_URL}" placeholder="https://your-app-default-rtdb.firebaseio.com" autocapitalize="none"></div>
-    <button class="sbtn" onclick="updateFirebaseUrl()">Save</button>
-    <button class="xbtn" onclick="closeM()">Cancel</button>
-  `);
-}
-function updateFirebaseUrl(){
-  const v=document.getElementById('fbu2').value.trim().replace(/\/$/,'');
-  if(!v){toast('Please enter a URL');return;}
-  localStorage.setItem('psb-fburl',v);
-  FB_URL=v;
-  document.getElementById('fb-url-display').textContent=v;
-  closeM();toast('Sync URL saved ✓');
-}
-
 // ── MODALS ───────────────────────────────────
-function showM(title,body){
-  document.getElementById('mtitle').textContent=title;
-  document.getElementById('mbody').innerHTML=body;
-  document.getElementById('modal').style.display='flex';
-}
+function showM(title,body){document.getElementById('mtitle').textContent=title;document.getElementById('mbody').innerHTML=body;document.getElementById('modal').style.display='flex';}
 function closeM(){document.getElementById('modal').style.display='none';}
 const catOpts=sel=>(D.categories||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>${c.i} ${c.n}</option>`).join('');
+function subcatOpts(catId,sel){
+  const cat=(D.categories||[]).find(c=>c.id===catId);
+  const subs=cat?.subs||[];
+  if(!subs.length)return`<option value="">— None —</option>`;
+  return`<option value="">— None —</option>`+subs.map(s=>`<option value="${s.id}"${s.id===sel?' selected':''}>${s.n}</option>`).join('');
+}
 const pOpts=sel=>`<option value="P"${sel==='P'?' selected':''}>${D.names.P}</option><option value="S"${sel==='S'?' selected':''}>${D.names.S}</option><option value="both"${sel==='both'?' selected':''}>Both</option>`;
-function colorSwatches(sel){return`<div class="color-swatches">${SWATCHES.map(c=>`<div class="csw${c===sel?' sel':''}" style="background:${c}" onclick="pickColor(this,'${c}')"></div>`).join('')}</div><input type="hidden" id="sc" value="${sel||SWATCHES[0]}">"`;}
+function colorSwatches(sel){return`<div class="color-swatches">${SWATCHES.map(c=>`<div class="csw${c===sel?' sel':''}" style="background:${c}" onclick="pickColor(this,'${c}')"></div>`).join('')}</div><input type="hidden" id="sc" value="${sel||SWATCHES[0]}">`;}
 function pickColor(el,c){document.querySelectorAll('.csw').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');document.getElementById('sc').value=c;}
-function emojiGrid(sel){return`<div class="emoji-grid">${EMOJIS.map(e=>`<div class="eo${e===sel?' sel':''}" onclick="pickEmoji(this,'${e}')">${e}</div>`).join('')}</div><input type="hidden" id="si" value="${sel||EMOJIS[0]}">"`;}
+function emojiGrid(sel){return`<div class="emoji-grid">${EMOJIS.map(e=>`<div class="eo${e===sel?' sel':''}" onclick="pickEmoji(this,'${e}')">${e}</div>`).join('')}</div><input type="hidden" id="si" value="${sel||EMOJIS[0]}">`;}
 function pickEmoji(el,e){document.querySelectorAll('.eo').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');document.getElementById('si').value=e;}
+function refreshSubcatDd(catSelId,subSelId){const sub=document.getElementById(subSelId);if(sub){const catId=document.getElementById(catSelId)?.value;sub.innerHTML=subcatOpts(catId,'');}}
 
 // ── EXPENSE ───────────────────────────────────
 function openFab(){if(ctab==='invest'){openAddInvest();return;}if(ctab==='loans'){openAddLoan();return;}openAddExp();}
 function openAddExp(){
+  const firstCat=(D.categories||[])[0]?.id||'';
   showM('Add Expense',`
     <div class="fg"><label class="flbl">Description</label><input class="fi" id="fd" placeholder="e.g. Swiggy dinner" autocomplete="off"></div>
     <div class="frow"><div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="fa" type="number" placeholder="0" inputmode="numeric"></div><div class="fg"><label class="flbl">Date</label><input class="fi" id="fdt" type="date" value="${today()}"></div></div>
-    <div class="fg"><label class="flbl">Category</label><select class="fi" id="fc">${catOpts()}</select></div>
+    <div class="fg"><label class="flbl">Category</label><select class="fi" id="fc" onchange="refreshSubcatDd('fc','fsc')">${catOpts()}</select></div>
+    <div class="fg"><label class="flbl">Subcategory</label><select class="fi" id="fsc">${subcatOpts(firstCat,'')}</select></div>
     <div class="frow"><div class="fg"><label class="flbl">Paid by</label><select class="fi" id="fp">${pOpts(cu)}</select></div><div class="fg"><label class="flbl">Split</label><select class="fi" id="fs"><option value="i">${D.splitRatio.P}/${D.splitRatio.S}</option><option value="5">50/50</option><option value="P">${D.names.P} only</option><option value="S">${D.names.S} only</option></select></div></div>
     <button class="sbtn" onclick="subExp()">Add Expense</button>
     <button class="xbtn" onclick="closeM()">Cancel</button>
   `);
 }
 function subExp(){
-  const d=document.getElementById('fd').value.trim(),a=parseInt(document.getElementById('fa').value)||0,dt=document.getElementById('fdt').value,c=document.getElementById('fc').value,pb=document.getElementById('fp').value,sp=document.getElementById('fs').value;
+  const d=document.getElementById('fd').value.trim(),a=parseInt(document.getElementById('fa').value)||0,dt=document.getElementById('fdt').value,c=document.getElementById('fc').value,sc=document.getElementById('fsc')?.value||'',pb=document.getElementById('fp').value,sp=document.getElementById('fs').value;
   if(!d||!a||!dt){toast('Fill all fields');return;}
   const spMap={i:[D.splitRatio.P,D.splitRatio.S],'5':[50,50],P:[100,0],S:[0,100]};
   const [spP,spS]=spMap[sp]||spMap.i;
-  D.expenses.push({id:'e'+uid(),d,cat:c,amt:a,pb,date:dt,sp:spP,ss:spS,by:cu});
-  ss();closeM();render();toast('Expense added ✓');
+  const exp={id:'e'+uid(),d,cat:c,amt:a,pb,date:dt,sp:spP,ss:spS,by:cu};
+  if(sc)exp.subcat=sc;
+  D.expenses.push(exp);ss();closeM();render();toast('Expense added ✓');
 }
 function openEditExp(id){
   const e=D.expenses.find(x=>x.id===id);if(!e)return;
   showM('Edit Expense',`
     <div class="fg"><label class="flbl">Description</label><input class="fi" id="ed" value="${e.d}"></div>
     <div class="frow"><div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="ea" type="number" value="${e.amt}" inputmode="numeric"></div><div class="fg"><label class="flbl">Date</label><input class="fi" id="edt" type="date" value="${e.date}"></div></div>
-    <div class="fg"><label class="flbl">Category</label><select class="fi" id="ec">${catOpts(e.cat)}</select></div>
+    <div class="fg"><label class="flbl">Category</label><select class="fi" id="ec" onchange="refreshSubcatDd('ec','esc')">${catOpts(e.cat)}</select></div>
+    <div class="fg"><label class="flbl">Subcategory</label><select class="fi" id="esc">${subcatOpts(e.cat,e.subcat||'')}</select></div>
     <div class="frow"><div class="fg"><label class="flbl">Paid by</label><select class="fi" id="ep">${pOpts(e.pb)}</select></div><div class="fg"><label class="flbl">${D.names.P} % share</label><input class="fi" id="esp" type="number" min="0" max="100" value="${e.sp}" inputmode="numeric"></div></div>
     <button class="sbtn" onclick="subEditExp('${id}')">Save</button>
     <button class="dbtn" onclick="delExp('${id}')">Delete</button>
@@ -547,6 +534,8 @@ function subEditExp(id){
   e.amt=parseInt(document.getElementById('ea').value)||e.amt;
   e.date=document.getElementById('edt').value||e.date;
   e.cat=document.getElementById('ec').value;
+  const sc=document.getElementById('esc')?.value||'';
+  if(sc)e.subcat=sc;else delete e.subcat;
   e.pb=document.getElementById('ep').value;
   const sp=parseInt(document.getElementById('esp').value);
   if(!isNaN(sp)){e.sp=Math.min(100,Math.max(0,sp));e.ss=100-e.sp;}
@@ -555,30 +544,9 @@ function subEditExp(id){
 function delExp(id){if(!confirm('Delete this expense?'))return;D.expenses=D.expenses.filter(x=>x.id!==id);ss();closeM();render();toast('Deleted');}
 
 // ── INVESTMENT ────────────────────────────────
-function openAddInvest(){
-  showM('Add Investment',`
-    <div class="fg"><label class="flbl">Name</label><input class="fi" id="in2" placeholder="e.g. NPS, SIP"></div>
-    <div class="frow"><div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="ia" type="number" inputmode="numeric"></div><div class="fg"><label class="flbl">Target (₹)</label><input class="fi" id="it" type="number" inputmode="numeric"></div></div>
-    <div class="fg"><label class="flbl">Person</label><select class="fi" id="ip"><option value="P">${D.names.P}</option><option value="S">${D.names.S}</option><option value="joint">Joint</option></select></div>
-    <button class="sbtn" onclick="subInvest()">Add</button><button class="xbtn" onclick="closeM()">Cancel</button>
-  `);
-}
-function subInvest(){
-  const n=document.getElementById('in2').value.trim(),a=parseInt(document.getElementById('ia').value)||0,t=parseInt(document.getElementById('it').value)||0,p=document.getElementById('ip').value;
-  if(!n||!a){toast('Fill all fields');return;}
-  D.investments.push({id:'i'+uid(),n,p,amt:a,tgt:t});ss();closeM();render();toast('Added ✓');
-}
-function openEditInvest(id){
-  const inv=D.investments.find(x=>x.id===id);if(!inv)return;
-  showM('Edit Investment',`
-    <div class="fg"><label class="flbl">Name</label><input class="fi" id="in2" value="${inv.n}"></div>
-    <div class="frow"><div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="ia" type="number" value="${inv.amt}" inputmode="numeric"></div><div class="fg"><label class="flbl">Target (₹)</label><input class="fi" id="it" type="number" value="${inv.tgt}" inputmode="numeric"></div></div>
-    <div class="fg"><label class="flbl">Person</label><select class="fi" id="ip"><option value="P"${inv.p==='P'?' selected':''}>${D.names.P}</option><option value="S"${inv.p==='S'?' selected':''}>${D.names.S}</option><option value="joint"${inv.p==='joint'?' selected':''}>Joint</option></select></div>
-    <button class="sbtn" onclick="subEditInvest('${id}')">Save</button>
-    <button class="dbtn" onclick="delInvest('${id}')">Delete</button>
-    <button class="xbtn" onclick="closeM()">Cancel</button>
-  `);
-}
+function openAddInvest(){showM('Add Investment',`<div class="fg"><label class="flbl">Name</label><input class="fi" id="in2" placeholder="e.g. NPS, SIP"></div><div class="frow"><div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="ia" type="number" inputmode="numeric"></div><div class="fg"><label class="flbl">Target (₹)</label><input class="fi" id="it" type="number" inputmode="numeric"></div></div><div class="fg"><label class="flbl">Person</label><select class="fi" id="ip"><option value="P">${D.names.P}</option><option value="S">${D.names.S}</option><option value="joint">Joint</option></select></div><button class="sbtn" onclick="subInvest()">Add</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
+function subInvest(){const n=document.getElementById('in2').value.trim(),a=parseInt(document.getElementById('ia').value)||0,t=parseInt(document.getElementById('it').value)||0,p=document.getElementById('ip').value;if(!n||!a){toast('Fill all fields');return;}D.investments.push({id:'i'+uid(),n,p,amt:a,tgt:t});ss();closeM();render();toast('Added ✓');}
+function openEditInvest(id){const inv=D.investments.find(x=>x.id===id);if(!inv)return;showM('Edit Investment',`<div class="fg"><label class="flbl">Name</label><input class="fi" id="in2" value="${inv.n}"></div><div class="frow"><div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="ia" type="number" value="${inv.amt}" inputmode="numeric"></div><div class="fg"><label class="flbl">Target (₹)</label><input class="fi" id="it" type="number" value="${inv.tgt}" inputmode="numeric"></div></div><div class="fg"><label class="flbl">Person</label><select class="fi" id="ip"><option value="P"${inv.p==='P'?' selected':''}>${D.names.P}</option><option value="S"${inv.p==='S'?' selected':''}>${D.names.S}</option><option value="joint"${inv.p==='joint'?' selected':''}>Joint</option></select></div><button class="sbtn" onclick="subEditInvest('${id}')">Save</button><button class="dbtn" onclick="delInvest('${id}')">Delete</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
 function subEditInvest(id){const inv=D.investments.find(x=>x.id===id);if(!inv)return;inv.n=document.getElementById('in2').value.trim();inv.amt=parseInt(document.getElementById('ia').value)||inv.amt;inv.tgt=parseInt(document.getElementById('it').value)||inv.tgt;inv.p=document.getElementById('ip').value;ss();closeM();render();toast('Saved ✓');}
 function delInvest(id){if(!confirm('Delete?'))return;D.investments=D.investments.filter(x=>x.id!==id);ss();closeM();render();}
 
@@ -602,12 +570,39 @@ function subEditRec(id){const r=D.recurring.find(x=>x.id===id);if(!r)return;r.d=
 function delRec(id){if(!confirm('Delete?'))return;D.recurring=D.recurring.filter(x=>x.id!==id);ss();closeM();render();}
 
 // ── CATEGORIES ───────────────────────────────
+function subcatListHtml(c){
+  const subs=c.subs||[];
+  let h=subs.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:8px"><div style="width:7px;height:7px;border-radius:50%;background:${c.c}"></div><span style="font-size:13px">${s.n}</span></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="openEditSubCat('${c.id}','${s.id}')" style="border:none;background:none;color:var(--p);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0">Edit</button>
+      <button onclick="delSubCat('${c.id}','${s.id}')" style="border:none;background:none;color:var(--red);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0">✕</button>
+    </div>
+  </div>`).join('');
+  h+=`<button onclick="openAddSubCat('${c.id}')" style="width:100%;padding:9px;margin-top:8px;background:var(--bg3);border:1px dashed var(--border);border-radius:var(--r2);color:var(--p);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer">+ Add Subcategory</button>`;
+  return h;
+}
 function catForm(c){return`<div class="fg"><label class="flbl">Name</label><input class="fi" id="cn" value="${c?c.n:''}" placeholder="Category name"></div><div class="fg"><label class="flbl">Icon</label>${emojiGrid(c?c.i:'')}</div><div class="fg"><label class="flbl">Color</label>${colorSwatches(c?c.c:'')}</div>`;}
 function openAddCat(){showM('New Category',catForm(null)+`<button class="sbtn" onclick="subAddCat()">Add</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
-function subAddCat(){const n=document.getElementById('cn').value.trim();if(!n){toast('Enter a name');return;}const id='c'+uid();D.categories.push({id,n,i:document.getElementById('si').value,c:document.getElementById('sc').value});D.budgets.push({cat:id,b:5000});ss();closeM();render();toast('Added ✓');}
-function openEditCat(id){const c=D.categories.find(x=>x.id===id);if(!c)return;showM('Edit Category',catForm(c)+`<button class="sbtn" onclick="subEditCat('${id}')">Save</button><button class="dbtn" onclick="delCat('${id}')">Delete</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
-function subEditCat(id){const c=D.categories.find(x=>x.id===id);if(!c)return;c.n=document.getElementById('cn').value.trim();c.i=document.getElementById('si').value;c.c=document.getElementById('sc').value;ss();closeM();render();toast('Updated ✓');}
+function subAddCat(){const n=document.getElementById('cn').value.trim();if(!n){toast('Enter a name');return;}const id='c'+uid();D.categories.push({id,n,i:document.getElementById('si').value,c:document.getElementById('sc').value,subs:[]});D.budgets.push({cat:id,b:5000});ss();closeM();render();toast('Added ✓');}
+function openEditCat(id){
+  const c=D.categories.find(x=>x.id===id);if(!c)return;
+  showM('Edit Category',`${catForm(c)}
+    <button class="sbtn" onclick="subEditCat('${id}')">Save</button>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Subcategories</div>
+      <div id="sclist">${subcatListHtml(c)}</div>
+    </div>
+    <button class="dbtn" onclick="delCat('${id}')">Delete Category</button>
+    <button class="xbtn" onclick="closeM()">Cancel</button>`);
+}
+function subEditCat(id){const c=D.categories.find(x=>x.id===id);if(!c)return;c.n=document.getElementById('cn').value.trim();c.i=document.getElementById('si').value;c.c=document.getElementById('sc').value;ss();render();toast('Updated ✓');const el=document.getElementById('sclist');if(el)el.innerHTML=subcatListHtml(c);}
 function delCat(id){if((D.expenses||[]).some(e=>e.cat===id)&&!confirm('Expenses use this category. Delete?'))return;D.categories=D.categories.filter(x=>x.id!==id);D.budgets=D.budgets.filter(b=>b.cat!==id);ss();closeM();render();toast('Deleted');}
+function openAddSubCat(catId){showM('Add Subcategory',`<div class="fg"><label class="flbl">Name</label><input class="fi" id="scn" placeholder="e.g. Vegetables" autocomplete="off"></div><button class="sbtn" onclick="subAddSubCat('${catId}')">Add</button><button class="xbtn" onclick="openEditCat('${catId}')">← Back</button>`);}
+function subAddSubCat(catId){const n=document.getElementById('scn').value.trim();if(!n){toast('Enter a name');return;}const c=D.categories.find(x=>x.id===catId);if(!c)return;if(!c.subs)c.subs=[];c.subs.push({id:'s'+uid(),n});ss();toast('Added ✓');openEditCat(catId);}
+function openEditSubCat(catId,subId){const c=D.categories.find(x=>x.id===catId),s=c?.subs?.find(x=>x.id===subId);if(!s)return;showM('Edit Subcategory',`<div class="fg"><label class="flbl">Name</label><input class="fi" id="scn" value="${s.n}"></div><button class="sbtn" onclick="subEditSubCat('${catId}','${subId}')">Save</button><button class="xbtn" onclick="openEditCat('${catId}')">← Back</button>`);}
+function subEditSubCat(catId,subId){const c=D.categories.find(x=>x.id===catId),s=c?.subs?.find(x=>x.id===subId);if(!s)return;s.n=document.getElementById('scn').value.trim()||s.n;ss();toast('Saved ✓');openEditCat(catId);}
+function delSubCat(catId,subId){if(!confirm('Delete subcategory?'))return;const c=D.categories.find(x=>x.id===catId);if(!c)return;c.subs=(c.subs||[]).filter(s=>s.id!==subId);(D.expenses||[]).forEach(e=>{if(e.cat===catId&&e.subcat===subId)delete e.subcat;});ss();toast('Deleted');openEditCat(catId);}
 
 // ── SETTINGS MODALS ──────────────────────────
 function openEditPeople(){showM('Edit People & Income',`<div class="fg"><label class="flbl">${D.names.P} name</label><input class="fi" id="pn1" value="${D.names.P}"></div><div class="fg"><label class="flbl">${D.names.P} monthly inflow (₹)</label><input class="fi" id="pi1" type="number" value="${D.inflows.P}" inputmode="numeric"></div><div class="fg"><label class="flbl">${D.names.S} name</label><input class="fi" id="pn2" value="${D.names.S}"></div><div class="fg"><label class="flbl">${D.names.S} monthly inflow (₹)</label><input class="fi" id="pi2" type="number" value="${D.inflows.S}" inputmode="numeric"></div><div class="fg"><label class="flbl">Override ${D.names.P} split % (blank = auto)</label><input class="fi" id="psr" type="number" min="1" max="99" placeholder="Auto" inputmode="numeric"></div><button class="sbtn" onclick="subEditPeople()">Save</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
@@ -615,14 +610,24 @@ function subEditPeople(){D.names.P=document.getElementById('pn1').value.trim()||
 function openEditTargets(){showM('Investment Targets',`<div class="fg"><label class="flbl">${D.names.P} target (₹)</label><input class="fi" id="pt1" type="number" value="${D.invTargets.P}" inputmode="numeric"></div><div class="fg"><label class="flbl">${D.names.S} target (₹)</label><input class="fi" id="pt2" type="number" value="${D.invTargets.S}" inputmode="numeric"></div><div class="fg"><label class="flbl">Prepayment target (₹)</label><input class="fi" id="pt3" type="number" value="${D.prepTarget}" inputmode="numeric"></div><button class="sbtn" onclick="subEditTargets()">Save</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
 function subEditTargets(){D.invTargets.P=parseInt(document.getElementById('pt1').value)||D.invTargets.P;D.invTargets.S=parseInt(document.getElementById('pt2').value)||D.invTargets.S;D.prepTarget=parseInt(document.getElementById('pt3').value)||D.prepTarget;ss();closeM();render();toast('Saved ✓');}
 function clearAll(){if(!confirm('Delete ALL data? Cannot be undone.'))return;D.expenses=[];D.settlements=[];ss();render();closeM();toast('Cleared');}
+function openSyncSetup(){showM('Cloud Sync',`<div class="fg"><label class="flbl">Firebase URL</label><input class="fi" id="fbu2" value="${FB_URL}" autocapitalize="none"></div><button class="sbtn" onclick="updateFbUrl()">Save</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
+function updateFbUrl(){const v=document.getElementById('fbu2').value.trim().replace(/\/$/,'');if(!v)return;localStorage.setItem('psb-fburl',v);FB_URL=v;const el=document.getElementById('fb-url-display');if(el)el.textContent=v;closeM();toast('Saved ✓');}
 
 // ── SETTLE ───────────────────────────────────
 function markSettled(){const s=sCalc(),amt=Math.abs(s.net);if(amt<1){toast('Nothing to settle!');return;}if(!D.settlements)D.settlements=[];D.settlements.push({from:s.net>0?D.names.S:D.names.P,to:s.net>0?D.names.P:D.names.S,amt,date:new Date().toLocaleDateString('en-IN')});ss();render();toast('✓ Settled');}
 
 // ── EXPORT / IMPORT ──────────────────────────
 function exportJSON(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({_v:2,...D},null,2)],{type:'application/json'}));a.download='ps-budget-'+today()+'.json';a.click();toast('Exported ✓');}
-function importJSON(inp){const r=new FileReader();r.onload=e=>{try{const p=JSON.parse(e.target.result);const{_v,...data}=p;if(!data.expenses||!data.names){toast('Invalid file');return;}if(!confirm('Replace all data with this backup?'))return;D=data;ss();render();closeM();toast('Imported ✓');}catch{toast('Could not read file');}inp.value='';};r.readAsText(inp.files[0]);}
-function exportCSV(){const cats={};(D.categories||[]).forEach(c=>{cats[c.id]=c.n;});const rows=[['Date','Description','Category','Amount','Paid By','P%','S%','Month']];(D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{rows.push([e.date,'"'+e.d.replace(/"/g,'""')+'"',cats[e.cat]||e.cat,e.amt,e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Both',e.sp,e.ss,e.date.slice(0,7)]);});const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download='ps-expenses-'+today()+'.csv';a.click();toast('CSV exported ✓');}
+function importJSON(inp){const r=new FileReader();r.onload=e=>{try{const p=JSON.parse(e.target.result);const{_v,...data}=p;if(!data.expenses||!data.names){toast('Invalid file');return;}if(!confirm('Replace all data?'))return;D=migrate(data);ss();render();closeM();toast('Imported ✓');}catch{toast('Could not read file');}inp.value='';};r.readAsText(inp.files[0]);}
+function exportCSV(){
+  const catMap={};(D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
+  const rows=[['Date','Description','Category','Subcategory','Amount','Paid By','P%','S%','Month']];
+  (D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+    const cn=catMap[e.cat]?.n||e.cat,sn=e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';
+    rows.push([e.date,'"'+e.d.replace(/"/g,'""')+'"',cn,sn,e.amt,e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Both',e.sp,e.ss,e.date.slice(0,7)]);
+  });
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download='ps-expenses-'+today()+'.csv';a.click();toast('CSV exported ✓');
+}
 
 // ── MISC ─────────────────────────────────────
 function setUser(u){cu=u;document.getElementById('bp').className='ubtn'+(u==='P'?' ap':'');document.getElementById('bs').className='ubtn'+(u==='S'?' as2':'');}
@@ -631,19 +636,9 @@ let tT;function toast(msg){const el=document.getElementById('toast');el.textCont
 function ss(){save();}
 
 // ── INIT ─────────────────────────────────────
-async function init(){
-  await load();
-  render();
-  // Update Firebase URL display in settings if rendered
-  const el=document.getElementById('fb-url-display');
-  if(el)el.textContent=FB_URL||'Not configured';
-}
-
 (async()=>{
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
-  }
-  await init();
+  if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+  await load();render();
 })();
 </script>
 </body>
