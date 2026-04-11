@@ -693,9 +693,17 @@ function rSettings(){
   <div class="card"><div class="ctitle">Cloud Sync<span class="ctitle-edit" onclick="openSyncSetup()">Change</span></div>
   <div class="eitem" style="border-bottom:none"><div class="einfo"><div style="font-size:11px;color:var(--muted);word-break:break-all" id="fb-url-display">${FB_URL}</div></div></div></div>
   <div class="card"><div class="ctitle">Backup & Export</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="sbtn" style="margin-top:0;font-size:13px" onclick="exportJSON()">⬇ Export JSON</button><button class="xbtn" style="margin-top:0;font-size:13px" onclick="document.getElementById('imp').click()">⬆ Import</button></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="sbtn" style="margin-top:0;font-size:13px" onclick="exportJSON()">⬇ Export JSON</button><button class="xbtn" style="margin-top:0;font-size:13px" onclick="document.getElementById('imp').click()">⬆ Import JSON</button></div>
   <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(this)">
-  <button class="xbtn" style="font-size:13px;margin-top:8px" onclick="exportCSV()">⬇ Export CSV</button></div>
+  <button class="xbtn" style="font-size:13px;margin-top:8px" onclick="exportCSV()">⬇ Export CSV</button>
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">📊 Excel — bulk edit on laptop, re-upload to sync</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="sbtn" style="margin-top:0;font-size:13px;background:var(--amber);color:#0D0F14" onclick="exportExcel()">⬇ Export Excel</button>
+      <button class="xbtn" style="margin-top:0;font-size:13px" onclick="document.getElementById('imp-xl').click()">⬆ Import Excel</button>
+    </div>
+    <input type="file" id="imp-xl" accept=".xlsx" style="display:none" onchange="importExcel(this)">
+  </div></div>
   <div class="card"><div class="ctitle" style="color:var(--red)">Danger Zone</div><button class="dbtn" onclick="clearAll()">Reset all data</button></div>`;
 }
 
@@ -910,7 +918,274 @@ function exportCSV(){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download='ps-expenses-'+today()+'.csv';a.click();toast('CSV exported ✓');
 }
 
-// ── MISC ─────────────────────────────────────
+// ── EXCEL EXPORT / IMPORT ─────────────────────
+function exportExcel(){
+  const doExport=()=>{
+    const catMap={};
+    (D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
+
+    // ── Categories sheet (editable, drives dropdowns) ──────────
+    // Columns: Category Name | Icon | Color | Subcategory 1 | Subcategory 2 | ... (up to 10)
+    const maxSubs=Math.max(0,...(D.categories||[]).map(c=>(c.subs||[]).length));
+    const subCols=Math.max(maxSubs,5); // always show at least 5 subcat columns
+    const catHdr=['Category Name','Icon','Color',...Array.from({length:subCols},(_,i)=>`Subcategory ${i+1}`)];
+    const catRows=[catHdr];
+    (D.categories||[]).forEach(c=>{
+      const subNames=(c.subs||[]).map(s=>s.n);
+      catRows.push([c.n,c.i,c.c,...subNames,...Array(Math.max(0,subCols-subNames.length)).fill('')]);
+    });
+    // Add a blank template row so user knows format
+    catRows.push(['','','#1CC98E',...Array(subCols).fill('')]);
+
+    // ── Expenses sheet ─────────────────────────────────────────
+    const expRows=[['ID','Date','Description','Category','Subcategory','Amount (₹)','Paid By','P Split %','S Split %','Month']];
+    (D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+      const cn=catMap[e.cat]?.n||e.cat;
+      const sn=e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';
+      const pb=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'both';
+      expRows.push([e.id,e.date,e.d,cn,sn,e.amt,pb,e.sp,e.ss,e.date.slice(0,7)]);
+    });
+
+    // ── Recurring sheet ────────────────────────────────────────
+    const recRows=[['ID','Description','Category','Amount (₹)','Paid By','P Split %','S Split %','From Month']];
+    (D.recurring||[]).filter(r=>!r.to).forEach(r=>{
+      const cn=catMap[r.cat]?.n||r.cat;
+      const pb=r.pb==='P'?D.names.P:r.pb==='S'?D.names.S:'both';
+      recRows.push([r.id,r.d,cn,r.amt,pb,r.sp,r.ss,r.from||'2020-01']);
+    });
+
+    const wb=XLSX.utils.book_new();
+
+    // Categories sheet — first so user sees it
+    const wsCat=XLSX.utils.aoa_to_sheet(catRows);
+    wsCat['!cols']=[{wch:22},{wch:6},{wch:10},...Array(subCols).fill({wch:22})];
+    // Style header row note in A1 comment area via a note row
+    XLSX.utils.book_append_sheet(wb,'Categories',wsCat);
+
+    const wsE=XLSX.utils.aoa_to_sheet(expRows);
+    wsE['!cols']=[{wch:14},{wch:12},{wch:30},{wch:22},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,'Expenses',wsE);
+
+    const wsR=XLSX.utils.aoa_to_sheet(recRows);
+    wsR['!cols']=[{wch:14},{wch:30},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,'Recurring',wsR);
+
+    // Instructions sheet
+    const instrRows=[
+      ['📖 HOW TO USE THIS FILE'],[''],
+      ['CATEGORIES sheet (edit this first!)'],
+      ['  • Add a new row to add a new category'],
+      ['  • Edit Category Name, Icon (emoji), Color (#hex)'],
+      ['  • Add subcategory names in Subcategory 1, 2, 3... columns'],
+      ['  • Leave subcategory cells blank if not needed'],
+      ['  • Delete a row to remove a category (only if no expenses use it)'],
+      [''],
+      ['EXPENSES sheet'],
+      ['  • Leave ID blank for new rows — app assigns IDs on import'],
+      ['  • Date format: YYYY-MM-DD (e.g. 2025-04-15)'],
+      ['  • Category must exactly match a name in the Categories sheet'],
+      ['  • Subcategory must match a subcategory of that category'],
+      ['  • Paid By: '+D.names.P+' / '+D.names.S+' / both'],
+      ['  • P Split % + S Split % must add up to 100'],
+      [''],
+      ['RECURRING sheet'],
+      ['  • Leave ID blank for new items'],
+      ['  • From Month: YYYY-MM (e.g. 2025-04) — when recurring starts'],
+      [''],
+      ['IMPORT BACK TO APP'],
+      ['  Settings → Import Excel'],
+      ['  The app will: create new categories/subcategories, add new expense rows,'],
+      ['  skip existing rows (matched by ID), update recurring items'],
+      ['  Then syncs to Firebase — both phones update instantly ✓'],
+    ];
+    const wsI=XLSX.utils.aoa_to_sheet(instrRows);
+    wsI['!cols']=[{wch:70}];
+    XLSX.utils.book_append_sheet(wb,'Instructions',wsI);
+
+    XLSX.writeFile(wb,'PS_Budget_'+today()+'.xlsx');
+    toast('Excel exported ✓');
+  };
+
+  if(window.XLSX){doExport();}
+  else{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=doExport;
+    s.onerror=()=>toast('Could not load Excel library');
+    document.head.appendChild(s);
+  }
+}
+
+function importExcel(inp){
+  const file=inp.files[0];if(!file)return;
+  const doImport=()=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'array'});
+        const nameToKey={[D.names.P.toLowerCase()]:'P',[D.names.S.toLowerCase()]:'S','both':'both','prachi':'P','shourya':'S'};
+        let addedCat=0,addedSub=0,addedExp=0,skippedExp=0,addedRec=0;
+
+        // ── STEP 1: Read Categories sheet first ───────────────
+        const wsCat=wb.Sheets['Categories'];
+        if(wsCat){
+          const rows=XLSX.utils.sheet_to_json(wsCat,{header:1,defval:''});
+          // find header row (has "Category Name")
+          let hdrRow=-1;
+          for(let i=0;i<Math.min(rows.length,4);i++){
+            if(String(rows[i][0]||'').toLowerCase().includes('category name')){hdrRow=i;break;}
+          }
+          if(hdrRow>=0){
+            for(let r=hdrRow+1;r<rows.length;r++){
+              const row=rows[r];
+              const catName=String(row[0]||'').trim();
+              if(!catName)continue;
+              const icon=String(row[1]||'📦').trim()||'📦';
+              const color=String(row[2]||'#8890AA').trim()||'#8890AA';
+              // subcategory names start at col 3
+              const subNames=row.slice(3).map(s=>String(s||'').trim()).filter(Boolean);
+
+              // find or create category
+              let cat=(D.categories||[]).find(c=>c.n.toLowerCase()===catName.toLowerCase());
+              if(!cat){
+                // new category
+                const id='c'+uid();
+                cat={id,n:catName,i:icon,c:color,subs:[]};
+                D.categories.push(cat);
+                D.budgets.push({cat:id,b:5000});
+                addedCat++;
+              } else {
+                // update icon/color if changed
+                cat.i=icon;cat.c=color;
+              }
+
+              // sync subcategories
+              subNames.forEach(sn=>{
+                const exists=(cat.subs||[]).find(s=>s.n.toLowerCase()===sn.toLowerCase());
+                if(!exists){
+                  if(!cat.subs)cat.subs=[];
+                  cat.subs.push({id:'s'+uid(),n:sn});
+                  addedSub++;
+                }
+              });
+            }
+          }
+        }
+
+        // rebuild catMap after category sync
+        const catMap={};
+        (D.categories||[]).forEach(c=>{
+          catMap[c.n.toLowerCase()]=c.id;
+          (c.subs||[]).forEach(s=>{catMap[c.id+'::'+s.n.toLowerCase()]=s.id;});
+        });
+
+        // ── STEP 2: Parse Expenses sheet ──────────────────────
+        const wsE=wb.Sheets['Expenses']||wb.Sheets[wb.SheetNames.find(n=>n!=='Categories'&&n!=='Recurring'&&n!=='Instructions')||wb.SheetNames[0]];
+        const existingIds=new Set((D.expenses||[]).map(e=>e.id));
+        if(wsE){
+          const rows=XLSX.utils.sheet_to_json(wsE,{header:1,defval:''});
+          let hdrRow=-1;
+          for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].join('').toLowerCase().includes('description')){hdrRow=i;break;}}
+          if(hdrRow>=0){
+            const hdrs=rows[hdrRow].map(h=>String(h).toLowerCase().trim());
+            const ci={
+              id:hdrs.indexOf('id'),
+              date:hdrs.findIndex(h=>h.includes('date')),
+              desc:hdrs.findIndex(h=>h.includes('description')),
+              cat:hdrs.findIndex(h=>h.includes('category')&&!h.includes('sub')),
+              subcat:hdrs.findIndex(h=>h.includes('sub')),
+              amt:hdrs.findIndex(h=>h.includes('amount')),
+              pb:hdrs.findIndex(h=>h.includes('paid')),
+              sp:hdrs.findIndex(h=>h.includes('p split')||h==='p%'),
+              ss:hdrs.findIndex(h=>h.includes('s split')||h==='s%'),
+            };
+            for(let r=hdrRow+1;r<rows.length;r++){
+              const row=rows[r];
+              const desc=String(row[ci.desc]||'').trim();
+              const dateRaw=String(row[ci.date]||'').trim();
+              const amtRaw=parseFloat(String(row[ci.amt]||'0').replace(/[₹,]/g,''));
+              if(!desc||!dateRaw||!amtRaw)continue;
+              let dateStr=dateRaw;
+              if(/^\d+$/.test(dateRaw)){
+                const d=XLSX.SSF.parse_date_code(parseInt(dateRaw));
+                dateStr=`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+              }
+              const existId=String(row[ci.id]||'').trim();
+              if(existId&&existingIds.has(existId)){skippedExp++;continue;}
+              const catName=String(row[ci.cat]||'').trim().toLowerCase();
+              const catId=catMap[catName]||(D.categories[0]?.id||'misc');
+              const subName=String(row[ci.subcat]||'').trim().toLowerCase();
+              const subId=subName?(catMap[catId+'::'+subName]||''):'';
+              const pb=nameToKey[String(row[ci.pb]||'both').trim().toLowerCase()]||'both';
+              const sp=ci.sp>=0?Math.min(100,Math.max(0,parseInt(row[ci.sp])||0)):D.splitRatio.P;
+              const ss=ci.ss>=0?Math.min(100,Math.max(0,parseInt(row[ci.ss])||0)):D.splitRatio.S;
+              const exp={id:'e'+uid(),d:desc,cat:catId,amt:amtRaw,pb,date:dateStr,sp,ss,by:'P'};
+              if(subId)exp.subcat=subId;
+              D.expenses.push(exp);existingIds.add(exp.id);addedExp++;
+            }
+          }
+        }
+
+        // ── STEP 3: Parse Recurring sheet ─────────────────────
+        const wsR=wb.Sheets['Recurring'];
+        const existRecIds=new Set((D.recurring||[]).map(r=>r.id));
+        if(wsR){
+          const rows=XLSX.utils.sheet_to_json(wsR,{header:1,defval:''});
+          let hdrRow=-1;
+          for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].join('').toLowerCase().includes('description')){hdrRow=i;break;}}
+          if(hdrRow>=0){
+            const hdrs=rows[hdrRow].map(h=>String(h).toLowerCase().trim());
+            const ci={
+              id:hdrs.indexOf('id'),desc:hdrs.findIndex(h=>h.includes('description')),
+              cat:hdrs.findIndex(h=>h.includes('category')),
+              amt:hdrs.findIndex(h=>h.includes('amount')),
+              pb:hdrs.findIndex(h=>h.includes('paid')),
+              sp:hdrs.findIndex(h=>h.includes('p split')),
+              ss:hdrs.findIndex(h=>h.includes('s split')),
+              from:hdrs.findIndex(h=>h.includes('from')),
+            };
+            for(let r=hdrRow+1;r<rows.length;r++){
+              const row=rows[r];
+              const desc=String(row[ci.desc]||'').trim();
+              const amtRaw=parseFloat(String(row[ci.amt]||'0').replace(/[₹,]/g,''));
+              if(!desc||!amtRaw)continue;
+              const existId=String(row[ci.id]||'').trim();
+              if(existId&&existRecIds.has(existId))continue;
+              const catName=String(row[ci.cat]||'').trim().toLowerCase();
+              const catId=catMap[catName]||(D.categories[0]?.id||'misc');
+              const pb=nameToKey[String(row[ci.pb]||'both').trim().toLowerCase()]||'both';
+              const sp=ci.sp>=0?parseInt(row[ci.sp])||50:50;
+              const ss=ci.ss>=0?parseInt(row[ci.ss])||50:50;
+              const from=String(row[ci.from]||ymKey(cm.y,cm.m)).trim()||ymKey(cm.y,cm.m);
+              D.recurring.push({id:'r'+uid(),d:desc,cat:catId,amt:amtRaw,pb,sp,ss,from});
+              addedRec++;
+            }
+          }
+        }
+
+        if(addedCat+addedSub+addedExp+addedRec===0&&skippedExp===0){toast('No new data found');inp.value='';return;}
+        ss();render();
+        const parts=[];
+        if(addedCat)parts.push(`${addedCat} categories`);
+        if(addedSub)parts.push(`${addedSub} subcategories`);
+        if(addedExp)parts.push(`${addedExp} expenses`);
+        if(addedRec)parts.push(`${addedRec} recurring`);
+        if(skippedExp)parts.push(`${skippedExp} skipped`);
+        toast('Imported: '+parts.join(', ')+' ✓');
+      }catch(err){console.error(err);toast('Could not read Excel file');}
+      inp.value='';
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  if(window.XLSX){doImport();}
+  else{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=doImport;
+    s.onerror=()=>toast('Could not load Excel library');
+    document.head.appendChild(s);
+  }
+}
 function chMonth(d){cm.m+=d;if(cm.m>11){cm.m=0;cm.y++;}if(cm.m<0){cm.m=11;cm.y--;}render();}
 let tT;function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.style.display='block';clearTimeout(tT);tT=setTimeout(()=>el.style.display='none',2200);}
 function ss(){save();}
