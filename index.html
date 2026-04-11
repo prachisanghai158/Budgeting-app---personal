@@ -242,7 +242,6 @@ function setSyncStatus(s,msg){
 }
 function migrate(data){
   if(data.categories)data.categories.forEach(c=>{if(!c.subs)c.subs=[];});
-  // migrate recurring to new format with pb/sp/ss and from date
   if(data.recurring)data.recurring.forEach(r=>{
     if(r.pb===undefined){
       if(r.split&&r.split.includes('50'))r.pb='both',r.sp=50,r.ss=50;
@@ -250,7 +249,18 @@ function migrate(data){
       else if(r.split&&r.split.toUpperCase().includes('S'))r.pb='S',r.sp=0,r.ss=100;
       else r.pb='both',r.sp=50,r.ss=50;
     }
-    if(!r.from)r.from='2020-01'; // treat old entries as always active
+    if(!r.from)r.from='2020-01';
+  });
+  // migrate old loans: add startDate derived from paid months if missing
+  if(data.loans)data.loans.forEach(l=>{
+    if(!l.startDate){
+      // estimate start date by going back 'paid' months from now
+      const paid=l.paid||0;
+      const d=new Date();
+      d.setMonth(d.getMonth()-paid);
+      l.startDate=ymKey(d.getFullYear(),d.getMonth());
+    }
+    if(!l.prepayments)l.prepayments=[];
   });
   return data;
 }
@@ -575,11 +585,209 @@ function rInvest(){
   return h;
 }
 
+// ── LOAN AMORTIZATION ENGINE ──────────────────
+// Returns full schedule state for a loan accounting for prepayments
+function loanCalc(l){
+  const r=l.rate/100/12; // monthly rate
+  const P=l.principal;
+  const emi=l.emi;
+  const startYM=l.startDate||'2020-01'; // YYYY-MM
+  const prepayments=(l.prepayments||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+
+  // walk month by month from start
+  let balance=P;
+  let month=0; // 0-indexed months from start
+  let totalInterest=0;
+  let totalPrincipalPaid=0;
+  const schedule=[]; // {ym, interest, principal, balance, prepayment}
+
+  // current YYYY-MM
+  const nowYM=ymKey(new Date().getFullYear(), new Date().getMonth());
+
+  // parse startYM to year/month numbers
+  const [sy,sm]=startYM.split('-').map(Number);
+
+  while(balance>1 && month<600){ // max 50 years safety
+    const y2=sy+Math.floor((sm-1+month)/12);
+    const m2=((sm-1+month)%12);
+    const ym=ymKey(y2,m2);
+
+    if(r>0){
+      const intPart=balance*r;
+      const prinPart=Math.min(emi-intPart, balance);
+      totalInterest+=intPart;
+      totalPrincipalPaid+=prinPart;
+      balance-=prinPart;
+
+      // apply any prepayment this month
+      const prep=prepayments.find(p=>p.date.slice(0,7)===ym);
+      const prepAmt=prep?Math.min(prep.amt,balance):0;
+      balance=Math.max(0,balance-prepAmt);
+
+      schedule.push({ym,interest:intPart,principal:prinPart,balance,prepayment:prepAmt});
+    } else {
+      // 0% — equal principal
+      const prinPart=Math.min(emi,balance);
+      totalPrincipalPaid+=prinPart;
+      balance=Math.max(0,balance-prinPart);
+      schedule.push({ym,interest:0,principal:prinPart,balance,prepayment:0});
+    }
+    month++;
+    if(balance<=1){balance=0;break;}
+  }
+
+  // find where we are now
+  const nowIdx=schedule.findIndex(s=>s.ym===nowYM);
+  const currentIdx=nowIdx>=0?nowIdx:Math.min(month-1,schedule.length-1);
+  const current=schedule[currentIdx]||schedule[schedule.length-1]||{balance:0,interest:0,principal:0};
+
+  const paidMonths=currentIdx+1;
+  const remMonths=Math.max(0,schedule.length-paidMonths);
+  const outstanding=current.balance;
+
+  // current month breakdown
+  const curInt=current.interest;
+  const curPrin=current.principal;
+
+  // total interest across full loan
+  const totalIntOverLife=schedule.reduce((a,s)=>a+s.interest,0);
+  const interestPaidSoFar=schedule.slice(0,paidMonths).reduce((a,s)=>a+s.interest,0);
+  const interestRemaining=totalIntOverLife-interestPaidSoFar;
+
+  // end date
+  const lastSched=schedule[schedule.length-1];
+  const endYM=lastSched?lastSched.ym:'—';
+
+  // total prepayment done
+  const totalPrep=prepayments.reduce((a,p)=>a+p.amt,0);
+  // interest saved vs original (no prepayments) schedule
+  const origSchedule=loanCalcNoPrepay(l);
+  const interestSaved=Math.max(0,origSchedule.totalInterest-totalIntOverLife);
+  const monthsSaved=Math.max(0,origSchedule.totalMonths-schedule.length);
+
+  return{outstanding,remMonths,paidMonths,curInt,curPrin,totalInterest:totalIntOverLife,interestPaidSoFar,interestRemaining,endYM,totalPrep,interestSaved,monthsSaved,schedule};
+}
+
+function loanCalcNoPrepay(l){
+  const r=l.rate/100/12;
+  let balance=l.principal,totalInterest=0,months=0;
+  while(balance>1&&months<600){
+    const intP=balance*r;
+    const prinP=Math.min(l.emi-intP,balance);
+    totalInterest+=intP;balance-=prinP;months++;
+    if(balance<=1)break;
+  }
+  return{totalInterest,totalMonths:months};
+}
+
+function fmtYM(ym){
+  if(!ym||ym==='—')return'—';
+  const[y,m]=ym.split('-');
+  return MN[parseInt(m)-1]+' '+y;
+}
+
 function rLoans(){
-  let h=(D.loans||[]).map(l=>{
-    const rem=l.tenure-l.paid,pp=Math.round(l.paid/l.tenure*100);
-    return`<div class="card" onclick="openEditLoan('${l.id}')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px"><div><div style="font-size:14px;font-weight:600">${l.n}</div><div style="font-size:11px;color:var(--muted)">${l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S} · ${l.rate}% p.a.</div></div><div style="background:rgba(255,181,71,.1);color:var(--amber);font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px">${fmt(l.emi)}/mo</div></div><div class="ms" style="margin-bottom:12px"><div class="ms-item"><div class="ms-lbl">Remaining</div><div class="ms-val av">${rem} mo</div></div><div class="ms-item"><div class="ms-lbl">Principal</div><div class="ms-val" style="font-size:11px">${fmt(l.principal)}</div></div><div class="ms-item"><div class="ms-lbl">Paid so far</div><div class="ms-val gv">${fmt(l.paid*l.emi)}</div></div></div><div class="cbar-label"><span style="color:var(--muted)">Progress</span><span>${pp}%</span></div><div class="ctrack" style="margin-top:4px"><div class="cbar" style="width:${pp}%;background:var(--amber)"></div></div></div>`;
-  }).join('');
+  const loans=D.loans||[];
+  let h='';
+  loans.forEach(l=>{
+    const calc=loanCalc(l);
+    const owner=l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
+    const pp=calc.schedule.length>0?Math.min(100,Math.round(calc.paidMonths/calc.schedule.length*100)):0;
+    const hasStart=!!l.startDate;
+
+    h+=`<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+        <div>
+          <div style="font-size:14px;font-weight:600">${l.n}</div>
+          <div style="font-size:11px;color:var(--muted)">${owner} · ${l.rate}% p.a. · Started ${hasStart?fmtYM(l.startDate):'—'}</div>
+        </div>
+        <div style="background:rgba(255,181,71,.1);color:var(--amber);font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px">${fmt(l.emi)}/mo</div>
+      </div>
+
+      ${hasStart?`
+      <!-- Outstanding & end date -->
+      <div class="ms" style="margin-bottom:10px">
+        <div class="ms-item"><div class="ms-lbl">Outstanding</div><div class="ms-val rv">${fmt(calc.outstanding)}</div></div>
+        <div class="ms-item"><div class="ms-lbl">Remaining</div><div class="ms-val av">${calc.remMonths} mo</div></div>
+        <div class="ms-item"><div class="ms-lbl">Paid off by</div><div class="ms-val" style="font-size:10px">${fmtYM(calc.endYM)}</div></div>
+      </div>
+
+      <!-- This month split -->
+      <div style="background:var(--bg4);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">This month's EMI breakdown</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--muted)">Interest portion</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--red)">${fmt(calc.curInt)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:12px;color:var(--muted)">Principal portion</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--p)">${fmt(calc.curPrin)}</span>
+        </div>
+      </div>
+
+      <!-- Interest summary -->
+      <div style="background:var(--bg4);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Interest summary</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--muted)">Interest paid so far</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--red)">${fmt(calc.interestPaidSoFar)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--muted)">Interest remaining</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--amber)">${fmt(calc.interestRemaining)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:12px;color:var(--muted)">Total interest (life)</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace">${fmt(calc.totalInterest)}</span>
+        </div>
+      </div>
+
+      ${calc.totalPrep>0?`
+      <!-- Prepayment savings -->
+      <div style="background:rgba(28,201,142,.08);border:1px solid rgba(28,201,142,.2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--p);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Prepayment savings</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--muted)">Total prepaid</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--p)">${fmt(calc.totalPrep)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--muted)">Interest saved</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--p)">${fmt(calc.interestSaved)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:12px;color:var(--muted)">Months saved</span>
+          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--p)">${calc.monthsSaved} mo</span>
+        </div>
+      </div>`:''}`:''}
+
+      <!-- Progress bar -->
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+        <span>Repayment progress</span><span>${pp}%</span>
+      </div>
+      <div class="ctrack" style="margin-bottom:12px">
+        <div class="cbar" style="width:${pp}%;background:var(--amber)"></div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button onclick="openEditLoan('${l.id}')" style="padding:9px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer">✏️ Edit Loan</button>
+        <button onclick="openAddPrepayment('${l.id}')" style="padding:9px;background:rgba(28,201,142,.1);border:1px solid rgba(28,201,142,.3);border-radius:var(--r2);color:var(--p);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer">+ Prepayment</button>
+      </div>
+
+      ${(l.prepayments||[]).length?`
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Prepayment history</div>
+        ${(l.prepayments||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)).map(p=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+            <div><div style="font-size:12px">${p.note||'Prepayment'}</div><div style="font-size:10px;color:var(--muted)">${fmtYM(p.date.slice(0,7))}</div></div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--p)">${fmt(p.amt)}</span>
+              <button onclick="delPrepayment('${l.id}','${p.id}')" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:13px;padding:0">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>`:''}
+    </div>`;
+  });
   return h+`<button class="dashaddbtn" onclick="openAddLoan()">+ Add loan / EMI</button>`;
 }
 
@@ -808,12 +1016,93 @@ function subEditInvest(id){const inv=D.investments.find(x=>x.id===id);if(!inv)re
 function delInvest(id){if(!confirm('Delete?'))return;D.investments=D.investments.filter(x=>x.id!==id);ss();closeM();render();}
 
 // ── LOANS ────────────────────────────────────
-function lForm(l){return`<div class="fg"><label class="flbl">Name</label><input class="fi" id="ln" value="${l.n||''}" placeholder="e.g. Home Loan"></div><div class="frow"><div class="fg"><label class="flbl">EMI/month (₹)</label><input class="fi" id="le" type="number" value="${l.emi||''}" inputmode="numeric"></div><div class="fg"><label class="flbl">Rate %</label><input class="fi" id="lr" type="number" step="0.1" value="${l.rate||''}" inputmode="decimal"></div></div><div class="frow"><div class="fg"><label class="flbl">Tenure (months)</label><input class="fi" id="lt" type="number" value="${l.tenure||''}" inputmode="numeric"></div><div class="fg"><label class="flbl">Months paid</label><input class="fi" id="lp" type="number" value="${l.paid||0}" inputmode="numeric"></div></div><div class="frow"><div class="fg"><label class="flbl">Principal (₹)</label><input class="fi" id="lpr" type="number" value="${l.principal||''}" inputmode="numeric"></div><div class="fg"><label class="flbl">Owner</label><select class="fi" id="lo"><option value="joint"${l.p==='joint'?' selected':''}>Joint</option><option value="P"${l.p==='P'?' selected':''}>${D.names.P}</option><option value="S"${l.p==='S'?' selected':''}>${D.names.S}</option></select></div></div>`;}
+function lForm(l){
+  const today2=today().slice(0,7); // YYYY-MM
+  return`
+    <div class="fg"><label class="flbl">Loan Name</label><input class="fi" id="ln" value="${l.n||''}" placeholder="e.g. Home Loan"></div>
+    <div class="frow">
+      <div class="fg"><label class="flbl">EMI / Month (₹)</label><input class="fi" id="le" type="number" value="${l.emi||''}" inputmode="numeric"></div>
+      <div class="fg"><label class="flbl">Interest Rate %</label><input class="fi" id="lr" type="number" step="0.1" value="${l.rate||''}" inputmode="decimal"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flbl">Tenure (months)</label><input class="fi" id="lt" type="number" value="${l.tenure||''}" inputmode="numeric"></div>
+      <div class="fg"><label class="flbl">Start Month</label><input class="fi" id="lstart" type="month" value="${l.startDate||today2}"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="flbl">Original Principal (₹)</label><input class="fi" id="lpr" type="number" value="${l.principal||''}" inputmode="numeric"></div>
+      <div class="fg"><label class="flbl">Owner</label><select class="fi" id="lo"><option value="joint"${l.p==='joint'?' selected':''}>Joint</option><option value="P"${l.p==='P'?' selected':''}>${D.names.P}</option><option value="S"${l.p==='S'?' selected':''}>${D.names.S}</option></select></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.6">
+      Start Month = when you took the loan. All calculations auto-derive from this.
+    </div>
+  `;
+}
 function openAddLoan(){showM('Add Loan',lForm({})+`<button class="sbtn" onclick="subLoan()">Add</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
-function subLoan(){const n=document.getElementById('ln').value.trim(),e=parseInt(document.getElementById('le').value)||0;if(!n||!e){toast('Fill all fields');return;}D.loans.push({id:'l'+uid(),n,emi:e,rate:parseFloat(document.getElementById('lr').value)||0,tenure:parseInt(document.getElementById('lt').value)||0,paid:parseInt(document.getElementById('lp').value)||0,principal:parseInt(document.getElementById('lpr').value)||0,p:document.getElementById('lo').value});ss();closeM();render();toast('Added ✓');}
-function openEditLoan(id){const l=D.loans.find(x=>x.id===id);if(!l)return;showM('Edit Loan',lForm(l)+`<button class="sbtn" onclick="subEditLoan('${id}')">Save</button><button class="dbtn" onclick="delLoan('${id}')">Delete</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
-function subEditLoan(id){const l=D.loans.find(x=>x.id===id);if(!l)return;l.n=document.getElementById('ln').value.trim();l.emi=parseInt(document.getElementById('le').value)||l.emi;l.rate=parseFloat(document.getElementById('lr').value)||l.rate;l.tenure=parseInt(document.getElementById('lt').value)||l.tenure;l.paid=parseInt(document.getElementById('lp').value)||0;l.principal=parseInt(document.getElementById('lpr').value)||l.principal;l.p=document.getElementById('lo').value;ss();closeM();render();toast('Saved ✓');}
-function delLoan(id){if(!confirm('Delete?'))return;D.loans=D.loans.filter(x=>x.id!==id);ss();closeM();render();}
+function subLoan(){
+  const n=document.getElementById('ln').value.trim(),e=parseInt(document.getElementById('le').value)||0;
+  if(!n||!e){toast('Fill all fields');return;}
+  D.loans.push({
+    id:'l'+uid(),n,
+    emi:e,
+    rate:parseFloat(document.getElementById('lr').value)||0,
+    tenure:parseInt(document.getElementById('lt').value)||0,
+    principal:parseInt(document.getElementById('lpr').value)||0,
+    p:document.getElementById('lo').value,
+    startDate:document.getElementById('lstart').value||today().slice(0,7),
+    prepayments:[],
+    // keep paid for backward compat but we calculate it now
+    paid:0,
+  });
+  ss();closeM();render();toast('Added ✓');
+}
+function openEditLoan(id){
+  const l=D.loans.find(x=>x.id===id);if(!l)return;
+  showM('Edit Loan',lForm(l)+`<button class="sbtn" onclick="subEditLoan('${id}')">Save</button><button class="dbtn" onclick="delLoan('${id}')">Delete</button><button class="xbtn" onclick="closeM()">Cancel</button>`);
+}
+function subEditLoan(id){
+  const l=D.loans.find(x=>x.id===id);if(!l)return;
+  l.n=document.getElementById('ln').value.trim()||l.n;
+  l.emi=parseInt(document.getElementById('le').value)||l.emi;
+  l.rate=parseFloat(document.getElementById('lr').value)||l.rate;
+  l.tenure=parseInt(document.getElementById('lt').value)||l.tenure;
+  l.principal=parseInt(document.getElementById('lpr').value)||l.principal;
+  l.p=document.getElementById('lo').value;
+  l.startDate=document.getElementById('lstart').value||l.startDate;
+  if(!l.prepayments)l.prepayments=[];
+  ss();closeM();render();toast('Saved ✓');
+}
+function delLoan(id){if(!confirm('Delete loan?'))return;D.loans=D.loans.filter(x=>x.id!==id);ss();closeM();render();}
+
+// ── PREPAYMENTS ──────────────────────────────
+function openAddPrepayment(loanId){
+  const l=D.loans.find(x=>x.id===loanId);if(!l)return;
+  showM('Add Prepayment — '+l.n,`
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+      Prepayment reduces your outstanding principal. The schedule recalculates automatically — you'll see interest saved and months reduced.
+    </div>
+    <div class="fg"><label class="flbl">Amount (₹)</label><input class="fi" id="pamt" type="number" inputmode="numeric" placeholder="e.g. 100000"></div>
+    <div class="fg"><label class="flbl">Date</label><input class="fi" id="pdate" type="date" value="${today()}"></div>
+    <div class="fg"><label class="flbl">Note (optional)</label><input class="fi" id="pnote" placeholder="e.g. Bonus payment"></div>
+    <button class="sbtn" onclick="subPrepayment('${loanId}')">Add Prepayment</button>
+    <button class="xbtn" onclick="closeM()">Cancel</button>
+  `);
+}
+function subPrepayment(loanId){
+  const l=D.loans.find(x=>x.id===loanId);if(!l)return;
+  const amt=parseInt(document.getElementById('pamt').value)||0;
+  const date=document.getElementById('pdate').value;
+  const note=document.getElementById('pnote').value.trim();
+  if(!amt||!date){toast('Enter amount and date');return;}
+  if(!l.prepayments)l.prepayments=[];
+  l.prepayments.push({id:'pp'+uid(),amt,date,note});
+  ss();closeM();render();toast('Prepayment added ✓');
+}
+function delPrepayment(loanId,prepId){
+  const l=D.loans.find(x=>x.id===loanId);if(!l)return;
+  if(!confirm('Remove this prepayment?'))return;
+  l.prepayments=(l.prepayments||[]).filter(p=>p.id!==prepId);
+  ss();render();toast('Removed');
+}
 
 // ── BUDGET EDIT ───────────────────────────────
 function openBudgetEdit(){showM('Budget Targets',(D.budgets||[]).map(b=>{const ci=gCat(b.cat);return`<div class="fg"><label class="flbl">${ci.i} ${ci.n}</label><input class="fi" data-cat="${b.cat}" type="number" value="${b.b}" inputmode="numeric"></div>`;}).join('')+`<button class="sbtn" onclick="saveBudgets()">Save</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
@@ -951,8 +1240,8 @@ function exportExcel(){
     (D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
     const wb=XLSX.utils.book_new();
 
-    // ── 1. Settings sheet ──────────────────────────────────────
-    const settRows=[
+    // ── 1. Settings ────────────────────────────────────────────
+    const wsSett=XLSX.utils.aoa_to_sheet([
       ['Field','Value','Notes'],
       ['Person 1 Name',D.names.P,''],
       ['Person 2 Name',D.names.S,''],
@@ -963,44 +1252,48 @@ function exportExcel(){
       ['Person 1 Investment Target',D.invTargets.P,'₹ per month'],
       ['Person 2 Investment Target',D.invTargets.S,'₹ per month'],
       ['Loan Prepayment Target',D.prepTarget,'₹ per month (joint)'],
-    ];
-    const wsSett=XLSX.utils.aoa_to_sheet(settRows);
+    ]);
     wsSett['!cols']=[{wch:28},{wch:20},{wch:35}];
     XLSX.utils.book_append_sheet(wb,'Settings',wsSett);
 
-    // ── 2. Budgets sheet ───────────────────────────────────────
-    const budRows=[['Category','Monthly Budget (₹)','Notes']];
-    (D.budgets||[]).forEach(b=>{
-      const ci=gCat(b.cat);
-      budRows.push([ci.n,b.b,'Edit budget amount only']);
-    });
+    // ── 2. Budgets ─────────────────────────────────────────────
+    const budRows=[['Category','Monthly Budget (₹)']];
+    (D.budgets||[]).forEach(b=>{const ci=gCat(b.cat);budRows.push([ci.n,b.b]);});
     const wsBud=XLSX.utils.aoa_to_sheet(budRows);
-    wsBud['!cols']=[{wch:22},{wch:20},{wch:30}];
+    wsBud['!cols']=[{wch:24},{wch:20}];
     XLSX.utils.book_append_sheet(wb,'Budgets',wsBud);
 
-    // ── 3. Investments sheet ───────────────────────────────────
-    const invRows=[['ID','Name','Person','Amount Invested (₹)','Target (₹)','Notes']];
+    // ── 3. Investments ─────────────────────────────────────────
+    const invRows=[['ID','Name','Person','Amount Invested (₹)','Target (₹)']];
     (D.investments||[]).forEach(i=>{
-      const who=i.p==='P'?D.names.P:i.p==='S'?D.names.S:'Joint';
-      invRows.push([i.id,i.n,who,i.amt,i.tgt,'Leave ID to update existing']);
+      invRows.push([i.id,i.n,i.p==='P'?D.names.P:i.p==='S'?D.names.S:'Joint',i.amt,i.tgt]);
     });
-    invRows.push(['','New Investment Name',D.names.P,0,0,'Add new row here']);
     const wsInv=XLSX.utils.aoa_to_sheet(invRows);
-    wsInv['!cols']=[{wch:14},{wch:28},{wch:12},{wch:20},{wch:14},{wch:28}];
+    wsInv['!cols']=[{wch:14},{wch:28},{wch:12},{wch:20},{wch:14}];
     XLSX.utils.book_append_sheet(wb,'Investments',wsInv);
 
-    // ── 4. Loans sheet ─────────────────────────────────────────
-    const loanRows=[['ID','Loan Name','Owner','EMI / Month (₹)','Interest Rate %','Tenure (months)','Months Paid','Principal (₹)','Notes']];
+    // ── 4. Loans ───────────────────────────────────────────────
+    const loanRows=[['ID','Loan Name','Owner','EMI / Month (₹)','Interest Rate %','Tenure (months)','Start Month (YYYY-MM)','Original Principal (₹)']];
     (D.loans||[]).forEach(l=>{
       const who=l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
-      loanRows.push([l.id,l.n,who,l.emi,l.rate,l.tenure,l.paid,l.principal,'Edit any field']);
+      loanRows.push([l.id,l.n,who,l.emi,l.rate,l.tenure,l.startDate||'',l.principal]);
     });
-    loanRows.push(['','New Loan Name','Joint',0,0,0,0,0,'Add new loan here']);
     const wsLoan=XLSX.utils.aoa_to_sheet(loanRows);
-    wsLoan['!cols']=[{wch:14},{wch:22},{wch:10},{wch:16},{wch:16},{wch:16},{wch:14},{wch:16},{wch:20}];
+    wsLoan['!cols']=[{wch:14},{wch:24},{wch:10},{wch:16},{wch:16},{wch:16},{wch:20},{wch:20}];
     XLSX.utils.book_append_sheet(wb,'Loans',wsLoan);
 
-    // ── 5. Categories sheet ────────────────────────────────────
+    // ── 5. Prepayments ─────────────────────────────────────────
+    const prepRows=[['Loan ID','Loan Name','Prepayment ID','Date (YYYY-MM-DD)','Amount (₹)','Note']];
+    (D.loans||[]).forEach(l=>{
+      (l.prepayments||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(p=>{
+        prepRows.push([l.id,l.n,p.id,p.date,p.amt,p.note||'']);
+      });
+    });
+    const wsPrep=XLSX.utils.aoa_to_sheet(prepRows);
+    wsPrep['!cols']=[{wch:14},{wch:24},{wch:14},{wch:18},{wch:14},{wch:24}];
+    XLSX.utils.book_append_sheet(wb,'Prepayments',wsPrep);
+
+    // ── 6. Categories ──────────────────────────────────────────
     const maxSubs=Math.max(0,...(D.categories||[]).map(c=>(c.subs||[]).length));
     const subCols=Math.max(maxSubs,5);
     const catHdr=['Category Name','Icon','Color',...Array.from({length:subCols},(_,i)=>`Subcategory ${i+1}`)];
@@ -1009,12 +1302,11 @@ function exportExcel(){
       const subNames=(c.subs||[]).map(s=>s.n);
       catRows.push([c.n,c.i,c.c,...subNames,...Array(Math.max(0,subCols-subNames.length)).fill('')]);
     });
-    catRows.push(['New Category','📦','#8890AA',...Array(subCols).fill('')]);
     const wsCat=XLSX.utils.aoa_to_sheet(catRows);
     wsCat['!cols']=[{wch:22},{wch:6},{wch:10},...Array(subCols).fill({wch:22})];
     XLSX.utils.book_append_sheet(wb,'Categories',wsCat);
 
-    // ── 6. Expenses sheet ──────────────────────────────────────
+    // ── 7. Expenses ────────────────────────────────────────────
     const expRows=[['ID','Date','Description','Category','Subcategory','Amount (₹)','Paid By','P Split %','S Split %','Month']];
     (D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
       const cn=catMap[e.cat]?.n||e.cat;
@@ -1026,7 +1318,7 @@ function exportExcel(){
     wsE['!cols']=[{wch:14},{wch:12},{wch:30},{wch:22},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10}];
     XLSX.utils.book_append_sheet(wb,'Expenses',wsE);
 
-    // ── 7. Recurring sheet ─────────────────────────────────────
+    // ── 8. Recurring ───────────────────────────────────────────
     const recRows=[['ID','Description','Category','Amount (₹)','Paid By','P Split %','S Split %','From Month']];
     (D.recurring||[]).filter(r=>!r.to).forEach(r=>{
       const cn=catMap[r.cat]?.n||r.cat;
@@ -1037,39 +1329,26 @@ function exportExcel(){
     wsR['!cols']=[{wch:14},{wch:30},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14}];
     XLSX.utils.book_append_sheet(wb,'Recurring',wsR);
 
-    // ── 8. Instructions sheet ──────────────────────────────────
+    // ── 9. Instructions ────────────────────────────────────────
     const instrRows=[
-      ['📖 COMPLETE DATA SYNC — ALL SHEETS'],[''],
-      ['SETTINGS sheet'],
-      ['  Edit names, income, split %, investment targets, prepayment target'],
-      ['  On import: ALL values replace app settings immediately'],[''],
-      ['BUDGETS sheet'],
-      ['  Edit monthly budget amount for each category'],
-      ['  On import: budget amounts updated for each matching category'],[''],
-      ['INVESTMENTS sheet'],
-      ['  Edit existing rows (by ID) or add new rows (blank ID)'],
-      ['  Person: '+D.names.P+' / '+D.names.S+' / Joint'],
-      ['  On import: existing updated, new ones added'],[''],
-      ['LOANS sheet'],
-      ['  Edit any loan field. Add new loans (blank ID)'],
-      ['  Owner: '+D.names.P+' / '+D.names.S+' / Joint'],
-      ['  Months Paid: how many EMIs have been paid so far'],
-      ['  On import: existing updated, new ones added'],[''],
-      ['CATEGORIES sheet'],
-      ['  Add rows for new categories. Add subcategory names across columns.'],
-      ['  ⚠ Do NOT rename existing categories — match by name'],[''],
-      ['EXPENSES sheet'],
-      ['  Leave ID blank for new rows. Do NOT edit existing IDs.'],
-      ['  Date: YYYY-MM-DD. Paid By: '+D.names.P+' / '+D.names.S+' / both'],[''],
-      ['RECURRING sheet'],
-      ['  Leave ID blank for new items. From Month: YYYY-MM'],[''],
-      ['IMPORT ORDER (automatic on upload)'],
-      ['  1. Settings → 2. Budgets → 3. Investments → 4. Loans'],
-      ['  5. Categories → 6. Expenses → 7. Recurring'],
-      ['  Then saves + syncs to Firebase → both phones update instantly ✓'],
+      ['📖 FULL REPLACE IMPORT — ALL DATA'],[''],
+      ['⚠️  IMPORTANT: Uploading this file REPLACES ALL app data with what is here.'],
+      ['   Always export fresh from the app before editing, then import back.'],[''],
+      ['SETTINGS — edit names, income, split %, investment targets'],
+      ['BUDGETS — edit monthly budget per category'],
+      ['INVESTMENTS — full list, all rows replaced on import'],
+      ['LOANS — full list. Start Month: YYYY-MM format (e.g. 2024-01)'],
+      ['PREPAYMENTS — one row per prepayment. Loan ID must match Loans sheet.'],
+      ['   Date: YYYY-MM-DD. Leave Prepayment ID blank for new entries.'],
+      ['CATEGORIES — full list. Subcategory names in columns D, E, F...'],
+      ['EXPENSES — full list. Date: YYYY-MM-DD. Paid By: '+D.names.P+' / '+D.names.S+' / both'],
+      ['RECURRING — active recurring items only. From Month: YYYY-MM'],[''],
+      ['IMPORT ORDER: Settings → Budgets → Investments → Loans → Prepayments'],
+      ['  → Categories → Expenses → Recurring'],
+      ['Then saves + syncs to Firebase → both phones update instantly ✓'],
     ];
     const wsI=XLSX.utils.aoa_to_sheet(instrRows);
-    wsI['!cols']=[{wch:75}];
+    wsI['!cols']=[{wch:80}];
     XLSX.utils.book_append_sheet(wb,'Instructions',wsI);
 
     XLSX.writeFile(wb,'PS_Budget_'+today()+'.xlsx');
@@ -1092,218 +1371,205 @@ function importExcel(inp){
     reader.onload=ev=>{
       try{
         const wb=XLSX.read(ev.target.result,{type:'array'});
-        let changes=[];
+        if(!confirm('⚠️ This will REPLACE ALL app data with the Excel contents. Are you sure?')){inp.value='';return;}
 
-        // helper: find header row index
-        const findHdr=(rows,keyword)=>{for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].join('').toLowerCase().includes(keyword))return i;}return -1;};
-        const n2k={[D.names.P.toLowerCase()]:'P',[D.names.S.toLowerCase()]:'S','both':'both','prachi':'P','shourya':'S','joint':'joint'};
-        const pN2k={[D.names.P.toLowerCase()]:'P',[D.names.S.toLowerCase()]:'S','prachi':'P','shourya':'S'};
+        const findHdr=(rows,kw)=>{for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].join('').toLowerCase().includes(kw))return i;}return -1;};
+        const parseNum=v=>parseFloat(String(v||'0').replace(/[₹,\s]/g,''))||0;
+        const parseStr=v=>String(v||'').trim();
 
-        // ── 1. Settings ────────────────────────────────────────
+        // Build name→key after reading settings (updated below)
+        let p1name=D.names.P,p2name=D.names.S;
+
+        // ── 1. Settings ──────────────────────────────────────
         const wsSett=wb.Sheets['Settings'];
         if(wsSett){
           const rows=XLSX.utils.sheet_to_json(wsSett,{header:1,defval:''});
-          const hdr=findHdr(rows,'field');
-          const dataRows=hdr>=0?rows.slice(hdr+1):rows;
           const map={};
-          dataRows.forEach(r=>{
-            const k=String(r[0]||'').trim().toLowerCase();
-            const v=String(r[1]||'').trim();
-            if(k&&v)map[k]=v;
-          });
-          const get=(k,def)=>map[k.toLowerCase()]??def;
-          const p1name=get('person 1 name',D.names.P);
-          const p2name=get('person 2 name',D.names.S);
-          const p1inc=parseInt(get('person 1 monthly income',D.inflows.P))||D.inflows.P;
-          const p2inc=parseInt(get('person 2 monthly income',D.inflows.S))||D.inflows.S;
-          const p1split=parseInt(get('person 1 split %',D.splitRatio.P))||D.splitRatio.P;
-          const p2split=parseInt(get('person 2 split %',D.splitRatio.S))||D.splitRatio.S;
-          const p1tgt=parseInt(get('person 1 investment target',D.invTargets.P))||D.invTargets.P;
-          const p2tgt=parseInt(get('person 2 investment target',D.invTargets.S))||D.invTargets.S;
-          const prep=parseInt(get('loan prepayment target',D.prepTarget))||D.prepTarget;
-          D.names.P=p1name;D.names.S=p2name;
-          D.inflows.P=p1inc;D.inflows.S=p2inc;
-          D.splitRatio.P=p1split;D.splitRatio.S=p2split;
-          D.invTargets.P=p1tgt;D.invTargets.S=p2tgt;
-          D.prepTarget=prep;
-          changes.push('settings');
-          // rebuild nameToKey after name update
-          n2k[p1name.toLowerCase()]='P';n2k[p2name.toLowerCase()]='S';
-          pN2k[p1name.toLowerCase()]='P';pN2k[p2name.toLowerCase()]='S';
+          rows.forEach(r=>{const k=parseStr(r[0]).toLowerCase(),v=parseStr(r[1]);if(k&&v)map[k]=v;});
+          const g=(k,d)=>map[k.toLowerCase()]??String(d);
+          p1name=g('person 1 name',D.names.P)||D.names.P;
+          p2name=g('person 2 name',D.names.S)||D.names.S;
+          D.names.P=p1name; D.names.S=p2name;
+          D.inflows.P=parseInt(g('person 1 monthly income',D.inflows.P))||D.inflows.P;
+          D.inflows.S=parseInt(g('person 2 monthly income',D.inflows.S))||D.inflows.S;
+          D.splitRatio.P=parseInt(g('person 1 split %',D.splitRatio.P))||D.splitRatio.P;
+          D.splitRatio.S=parseInt(g('person 2 split %',D.splitRatio.S))||D.splitRatio.S;
+          D.invTargets.P=parseInt(g('person 1 investment target',D.invTargets.P))||D.invTargets.P;
+          D.invTargets.S=parseInt(g('person 2 investment target',D.invTargets.S))||D.invTargets.S;
+          D.prepTarget=parseInt(g('loan prepayment target',D.prepTarget))||D.prepTarget;
         }
+        const n2k={[p1name.toLowerCase()]:'P',[p2name.toLowerCase()]:'S','both':'both','prachi':'P','shourya':'S','joint':'joint'};
+        const p2k={[p1name.toLowerCase()]:'P',[p2name.toLowerCase()]:'S','joint':'joint','prachi':'P','shourya':'S'};
 
-        // ── 2. Budgets ─────────────────────────────────────────
+        // ── 2. Budgets — FULL REPLACE ────────────────────────
         const wsBud=wb.Sheets['Budgets'];
         if(wsBud){
           const rows=XLSX.utils.sheet_to_json(wsBud,{header:1,defval:''});
           const hdr=findHdr(rows,'category');
           if(hdr>=0){
+            const newBudgets=[];
             rows.slice(hdr+1).forEach(row=>{
-              const catName=String(row[0]||'').trim().toLowerCase();
-              const amt=parseInt(String(row[1]||'0').replace(/[₹,]/g,''));
+              const catName=parseStr(row[0]).toLowerCase();
+              const amt=parseNum(row[1]);
               if(!catName||!amt)return;
-              const cat=(D.categories||[]).find(c=>c.n.toLowerCase()===catName);
-              if(cat){const b=D.budgets.find(b=>b.cat===cat.id);if(b)b.b=amt;else D.budgets.push({cat:cat.id,b:amt});}
+              // we'll match after categories are built; store by name for now
+              newBudgets.push({catName,b:amt});
             });
-            changes.push('budgets');
+            D._pendingBudgets=newBudgets;
           }
         }
 
-        // ── 3. Investments ─────────────────────────────────────
+        // ── 3. Investments — FULL REPLACE ───────────────────
         const wsInv=wb.Sheets['Investments'];
         if(wsInv){
           const rows=XLSX.utils.sheet_to_json(wsInv,{header:1,defval:''});
           const hdr=findHdr(rows,'name');
           if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>String(h).toLowerCase());
+            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
             const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('person')),amt:hdrs.findIndex(h=>h.includes('amount')||h.includes('invested')),tgt:hdrs.findIndex(h=>h.includes('target'))};
+            D.investments=[];
             rows.slice(hdr+1).forEach(row=>{
-              const name=String(row[ci.n]||'').trim();
-              const amt=parseFloat(String(row[ci.amt]||'0').replace(/[₹,]/g,''));
-              if(!name||amt===0&&!row[ci.id])return;
-              const existId=String(row[ci.id]||'').trim();
-              const tgt=parseFloat(String(row[ci.tgt]||'0').replace(/[₹,]/g,''))||0;
-              const pRaw=String(row[ci.p]||'').trim().toLowerCase();
-              const p=pN2k[pRaw]||'joint';
-              if(existId){
-                const inv=(D.investments||[]).find(i=>i.id===existId);
-                if(inv){inv.n=name||inv.n;inv.amt=isNaN(amt)?inv.amt:amt;inv.tgt=tgt||inv.tgt;inv.p=p||inv.p;}
-              } else if(name&&!isNaN(amt)&&amt>0){
-                D.investments.push({id:'i'+uid(),n:name,p,amt,tgt});
-              }
+              const name=parseStr(row[ci.n]);const amt=parseNum(row[ci.amt]);
+              if(!name||(!amt&&!parseStr(row[ci.id])))return;
+              const p=p2k[parseStr(row[ci.p]).toLowerCase()]||'P';
+              const tgt=parseNum(row[ci.tgt]);
+              const id=parseStr(row[ci.id])||'i'+uid();
+              D.investments.push({id,n:name,p,amt,tgt});
             });
-            changes.push('investments');
           }
         }
 
-        // ── 4. Loans ───────────────────────────────────────────
+        // ── 4. Loans — FULL REPLACE ──────────────────────────
         const wsLoan=wb.Sheets['Loans'];
         if(wsLoan){
           const rows=XLSX.utils.sheet_to_json(wsLoan,{header:1,defval:''});
           const hdr=findHdr(rows,'loan name');
           if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>String(h).toLowerCase());
-            const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('owner')),emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),tenure:hdrs.findIndex(h=>h.includes('tenure')),paid:hdrs.findIndex(h=>h.includes('paid')),prin:hdrs.findIndex(h=>h.includes('principal'))};
+            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
+            const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('owner')),emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),tenure:hdrs.findIndex(h=>h.includes('tenure')),start:hdrs.findIndex(h=>h.includes('start')),prin:hdrs.findIndex(h=>h.includes('principal'))};
+            D.loans=[];
             rows.slice(hdr+1).forEach(row=>{
-              const name=String(row[ci.n]||'').trim();
-              const emi=parseFloat(String(row[ci.emi]||'0').replace(/[₹,]/g,''));
+              const name=parseStr(row[ci.n]);const emi=parseNum(row[ci.emi]);
               if(!name||!emi)return;
-              const existId=String(row[ci.id]||'').trim();
-              const pRaw=String(row[ci.p]||'joint').trim().toLowerCase();
-              const p=n2k[pRaw]||'joint';
+              const id=parseStr(row[ci.id])||'l'+uid();
+              const p=n2k[parseStr(row[ci.p]).toLowerCase()]||'joint';
               const rate=parseFloat(row[ci.rate])||0;
               const tenure=parseInt(row[ci.tenure])||0;
-              const paid=parseInt(row[ci.paid])||0;
-              const principal=parseFloat(String(row[ci.prin]||'0').replace(/[₹,]/g,''))||0;
-              if(existId){
-                const l=(D.loans||[]).find(l=>l.id===existId);
-                if(l){l.n=name||l.n;l.emi=emi||l.emi;l.rate=rate||l.rate;l.tenure=tenure||l.tenure;l.paid=paid;l.principal=principal||l.principal;l.p=p;}
-              } else if(name&&emi>0){
-                D.loans.push({id:'l'+uid(),n:name,emi,rate,tenure,paid,principal,p});
-              }
+              const startDate=parseStr(row[ci.start])||'';
+              const principal=parseNum(row[ci.prin]);
+              D.loans.push({id,n:name,emi,rate,tenure,startDate,principal,p,prepayments:[]});
             });
-            changes.push('loans');
           }
         }
 
-        // ── 5. Categories ──────────────────────────────────────
-        let addedCat=0,addedSub=0;
+        // ── 5. Prepayments — attach to loans ────────────────
+        const wsPrep=wb.Sheets['Prepayments'];
+        if(wsPrep){
+          const rows=XLSX.utils.sheet_to_json(wsPrep,{header:1,defval:''});
+          const hdr=findHdr(rows,'loan id');
+          if(hdr>=0){
+            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
+            const ci={lid:hdrs.findIndex(h=>h.includes('loan id')),pid:hdrs.findIndex(h=>h.includes('prepayment id')),date:hdrs.findIndex(h=>h.includes('date')),amt:hdrs.findIndex(h=>h.includes('amount')),note:hdrs.findIndex(h=>h.includes('note'))};
+            rows.slice(hdr+1).forEach(row=>{
+              const loanId=parseStr(row[ci.lid]);const amt=parseNum(row[ci.amt]);
+              let dateRaw=parseStr(row[ci.date]);
+              if(!loanId||!amt)return;
+              if(/^\d+$/.test(dateRaw)){const d=XLSX.SSF.parse_date_code(parseInt(dateRaw));dateRaw=`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;}
+              const loan=D.loans.find(l=>l.id===loanId);
+              if(!loan)return;
+              const pid=parseStr(row[ci.pid])||'pp'+uid();
+              const note=ci.note>=0?parseStr(row[ci.note]):'';
+              loan.prepayments.push({id:pid,amt,date:dateRaw,note});
+            });
+          }
+        }
+
+        // ── 6. Categories — FULL REPLACE ────────────────────
         const wsCat=wb.Sheets['Categories'];
         if(wsCat){
           const rows=XLSX.utils.sheet_to_json(wsCat,{header:1,defval:''});
           const hdr=findHdr(rows,'category name');
           if(hdr>=0){
+            D.categories=[];
             rows.slice(hdr+1).forEach(row=>{
-              const catName=String(row[0]||'').trim();
+              const catName=parseStr(row[0]);
               if(!catName||catName.toLowerCase().startsWith('new category'))return;
-              const icon=String(row[1]||'📦').trim()||'📦';
-              const color=String(row[2]||'#8890AA').trim()||'#8890AA';
-              const subNames=row.slice(3).map(s=>String(s||'').trim()).filter(Boolean);
-              let cat=(D.categories||[]).find(c=>c.n.toLowerCase()===catName.toLowerCase());
-              if(!cat){
-                const id='c'+uid();cat={id,n:catName,i:icon,c:color,subs:[]};
-                D.categories.push(cat);D.budgets.push({cat:id,b:5000});addedCat++;
-              } else {cat.i=icon;cat.c=color;}
-              subNames.forEach(sn=>{
-                if(!(cat.subs||[]).find(s=>s.n.toLowerCase()===sn.toLowerCase())){
-                  if(!cat.subs)cat.subs=[];cat.subs.push({id:'s'+uid(),n:sn});addedSub++;
-                }
-              });
+              const icon=parseStr(row[1])||'📦';
+              const color=parseStr(row[2])||'#8890AA';
+              const subNames=row.slice(3).map(s=>parseStr(s)).filter(Boolean);
+              const id='c'+uid();
+              D.categories.push({id,n:catName,i:icon,c:color,subs:subNames.map(n=>({id:'s'+uid(),n}))});
             });
           }
         }
-        if(addedCat||addedSub)changes.push(`${addedCat} cats, ${addedSub} subcats`);
 
-        // rebuild catMap after category changes
+        // Apply budgets now that categories exist
         const catMap={};
-        (D.categories||[]).forEach(c=>{
+        D.categories.forEach(c=>{
           catMap[c.n.toLowerCase()]=c.id;
           (c.subs||[]).forEach(s=>{catMap[c.id+'::'+s.n.toLowerCase()]=s.id;});
         });
+        if(D._pendingBudgets){
+          D.budgets=D._pendingBudgets.map(b=>({cat:catMap[b.catName]||b.catName,b:b.b})).filter(b=>b.cat);
+          // add budgets for any category not in the list
+          D.categories.forEach(c=>{if(!D.budgets.find(b=>b.cat===c.id))D.budgets.push({cat:c.id,b:5000});});
+          delete D._pendingBudgets;
+        }
 
-        // ── 6. Expenses ────────────────────────────────────────
-        let addedExp=0,skippedExp=0;
+        // ── 7. Expenses — FULL REPLACE ───────────────────────
         const wsE=wb.Sheets['Expenses'];
-        const existingIds=new Set((D.expenses||[]).map(e=>e.id));
         if(wsE){
           const rows=XLSX.utils.sheet_to_json(wsE,{header:1,defval:''});
           const hdr=findHdr(rows,'description');
           if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>String(h).toLowerCase().trim());
+            D.expenses=[];
+            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
             const ci={id:hdrs.indexOf('id'),date:hdrs.findIndex(h=>h.includes('date')),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')&&!h.includes('sub')),subcat:hdrs.findIndex(h=>h.includes('sub')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')||h==='p%'),ss:hdrs.findIndex(h=>h.includes('s split')||h==='s%')};
             rows.slice(hdr+1).forEach(row=>{
-              const desc=String(row[ci.desc]||'').trim();
-              const dateRaw=String(row[ci.date]||'').trim();
-              const amtRaw=parseFloat(String(row[ci.amt]||'0').replace(/[₹,]/g,''));
-              if(!desc||!dateRaw||!amtRaw)return;
-              let dateStr=dateRaw;
-              if(/^\d+$/.test(dateRaw)){const d=XLSX.SSF.parse_date_code(parseInt(dateRaw));dateStr=`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;}
-              const existId=String(row[ci.id]||'').trim();
-              if(existId&&existingIds.has(existId)){skippedExp++;return;}
-              const catId=catMap[String(row[ci.cat]||'').trim().toLowerCase()]||(D.categories[0]?.id||'misc');
-              const subId=catMap[catId+'::'+String(row[ci.subcat]||'').trim().toLowerCase()]||'';
-              const pb=n2k[String(row[ci.pb]||'both').trim().toLowerCase()]||'both';
+              const desc=parseStr(row[ci.desc]);
+              let dateRaw=parseStr(row[ci.date]);
+              const amt=parseNum(row[ci.amt]);
+              if(!desc||!dateRaw||!amt)return;
+              if(/^\d+$/.test(dateRaw)){const d=XLSX.SSF.parse_date_code(parseInt(dateRaw));dateRaw=`${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;}
+              const id=parseStr(row[ci.id])||'e'+uid();
+              const catId=catMap[parseStr(row[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc');
+              const subId=catMap[catId+'::'+parseStr(row[ci.subcat]).toLowerCase()]||'';
+              const pb=n2k[parseStr(row[ci.pb]).toLowerCase()]||'both';
               const sp=ci.sp>=0?Math.min(100,Math.max(0,parseInt(row[ci.sp])||0)):D.splitRatio.P;
               const ss=ci.ss>=0?Math.min(100,Math.max(0,parseInt(row[ci.ss])||0)):D.splitRatio.S;
-              const exp={id:'e'+uid(),d:desc,cat:catId,amt:amtRaw,pb,date:dateStr,sp,ss,by:'P'};
+              const exp={id,d:desc,cat:catId,amt,pb,date:dateRaw,sp,ss,by:'P'};
               if(subId)exp.subcat=subId;
-              D.expenses.push(exp);existingIds.add(exp.id);addedExp++;
+              D.expenses.push(exp);
             });
           }
         }
-        if(addedExp||skippedExp)changes.push(`${addedExp} expenses (+${skippedExp} skipped)`);
 
-        // ── 7. Recurring ───────────────────────────────────────
-        let addedRec=0;
+        // ── 8. Recurring — FULL REPLACE ──────────────────────
         const wsRec=wb.Sheets['Recurring'];
-        const existRecIds=new Set((D.recurring||[]).map(r=>r.id));
         if(wsRec){
           const rows=XLSX.utils.sheet_to_json(wsRec,{header:1,defval:''});
           const hdr=findHdr(rows,'description');
           if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>String(h).toLowerCase().trim());
+            D.recurring=[];
+            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
             const ci={id:hdrs.indexOf('id'),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')),ss:hdrs.findIndex(h=>h.includes('s split')),from:hdrs.findIndex(h=>h.includes('from'))};
             rows.slice(hdr+1).forEach(row=>{
-              const desc=String(row[ci.desc]||'').trim();
-              const amt=parseFloat(String(row[ci.amt]||'0').replace(/[₹,]/g,''));
+              const desc=parseStr(row[ci.desc]);const amt=parseNum(row[ci.amt]);
               if(!desc||!amt)return;
-              const existId=String(row[ci.id]||'').trim();
-              if(existId&&existRecIds.has(existId))return;
-              const catId=catMap[String(row[ci.cat]||'').trim().toLowerCase()]||(D.categories[0]?.id||'misc');
-              const pb=n2k[String(row[ci.pb]||'both').trim().toLowerCase()]||'both';
+              const id=parseStr(row[ci.id])||'r'+uid();
+              const catId=catMap[parseStr(row[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc');
+              const pb=n2k[parseStr(row[ci.pb]).toLowerCase()]||'both';
               const sp=ci.sp>=0?parseInt(row[ci.sp])||50:50;
               const ss=ci.ss>=0?parseInt(row[ci.ss])||50:50;
-              const from=String(row[ci.from]||ymKey(cm.y,cm.m)).trim()||ymKey(cm.y,cm.m);
-              D.recurring.push({id:'r'+uid(),d:desc,cat:catId,amt,pb,sp,ss,from});addedRec++;
+              const from=parseStr(row[ci.from])||ymKey(cm.y,cm.m);
+              D.recurring.push({id,d:desc,cat:catId,amt,pb,sp,ss,from});
             });
           }
         }
-        if(addedRec)changes.push(`${addedRec} recurring`);
 
-        if(!changes.length){toast('No changes found in file');inp.value='';return;}
         ss();render();
-        toast('Updated: '+changes.join(' · ')+' ✓');
-      }catch(err){console.error(err);toast('Could not read Excel file');}
+        toast('Full data replaced from Excel ✓');
+      }catch(err){console.error(err);toast('Could not read Excel: '+err.message);}
       inp.value='';
     };
     reader.readAsArrayBuffer(file);
