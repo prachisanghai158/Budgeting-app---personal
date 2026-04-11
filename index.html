@@ -242,7 +242,7 @@ function setSyncStatus(s,msg){
 }
 function migrate(data){
   if(data.categories)data.categories.forEach(c=>{if(!c.subs)c.subs=[];});
-  // migrate recurring to new format with pb/sp/ss
+  // migrate recurring to new format with pb/sp/ss and from date
   if(data.recurring)data.recurring.forEach(r=>{
     if(r.pb===undefined){
       if(r.split&&r.split.includes('50'))r.pb='both',r.sp=50,r.ss=50;
@@ -250,6 +250,7 @@ function migrate(data){
       else if(r.split&&r.split.toUpperCase().includes('S'))r.pb='S',r.sp=0,r.ss=100;
       else r.pb='both',r.sp=50,r.ss=50;
     }
+    if(!r.from)r.from='2020-01'; // treat old entries as always active
   });
   return data;
 }
@@ -301,9 +302,18 @@ function mExps(){
   const k=cm.y+'-'+String(cm.m+1).padStart(2,'0');
   return(D.expenses||[]).filter(e=>e.date&&e.date.startsWith(k));
 }
-// recurring total for a person or household
+// get YYYY-MM key for a given year+month
+function ymKey(y,m){return y+'-'+String(m+1).padStart(2,'0');}
+// check if a recurring item is active in the current view month
+function recActive(r){
+  const cur=ymKey(cm.y,cm.m);
+  if(r.from&&cur<r.from)return false;
+  if(r.to&&cur>=r.to)return false;
+  return true;
+}
+// recurring total for a person or household — only active items this month
 function recTotal(who){
-  return(D.recurring||[]).reduce((a,r)=>{
+  return(D.recurring||[]).filter(recActive).reduce((a,r)=>{
     if(who==='H')return a+r.amt;
     if(who==='P')return a+r.amt*(r.sp/100);
     if(who==='S')return a+r.amt*(r.ss/100);
@@ -434,7 +444,7 @@ function toggleCat(key){
 // ── EXPENSES RENDERER ─────────────────────────
 function rExp(){
   const exps=mExps().slice().sort((a,b)=>b.date.localeCompare(a.date));
-  const recs=D.recurring||[];
+  const recs=(D.recurring||[]).filter(recActive);
   const recTotal_all=recs.reduce((a,r)=>a+r.amt,0);
 
   // filter by view
@@ -456,9 +466,15 @@ function rExp(){
     </div>
   </div>`;
 
-  // recurring section
+  // recurring section (collapsible)
+  const recOpen=!!expandedCats['__rec'];
   if(recs.length){
-    h+=`<div class="dlbl">Recurring this month</div><div class="card" style="padding:4px 12px;margin-bottom:10px">`;
+    h+=`<div class="cat-row" style="margin-bottom:4px" onclick="toggleCat('__rec')">
+      <span style="font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;flex:1">🔁 Recurring · ${fmt(recSum)}</span>
+      <span class="cat-chevron${recOpen?' open':''}" id="chev-__rec" style="font-size:11px">▶</span>
+    </div>
+    <div id="panel-__rec" class="subcat-panel${recOpen?' open':''}" style="border-bottom:none">
+    <div class="card" style="padding:4px 12px;margin-bottom:10px">`;
     recs.forEach(r=>{
       const ci=gCat(r.cat);
       const myAmt=view==='H'?r.amt:view==='P'?r.amt*(r.sp/100):r.amt*(r.ss/100);
@@ -471,7 +487,7 @@ function rExp(){
         <div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div>
       </div>`;
     });
-    h+=`<button class="dashaddbtn" style="margin:6px 0 2px" onclick="openRecurring()">+ Add recurring</button></div>`;
+    h+=`<button class="dashaddbtn" style="margin:6px 0 2px" onclick="openRecurring()">+ Add recurring</button></div></div>`;
   } else {
     h+=`<button class="dashaddbtn" onclick="openRecurring()">+ Add recurring expense</button>`;
   }
@@ -785,7 +801,8 @@ function subRec(){
   const spMap={i:[D.splitRatio.P,D.splitRatio.S],'5':[50,50],P:[100,0],S:[0,100]};
   const [spP,spS]=spMap[sp]||spMap.i;
   const pb=document.getElementById('rpb').value;
-  D.recurring.push({id:'r'+uid(),d,cat:document.getElementById('rc').value,amt:a,pb,sp:spP,ss:spS});
+  const from=ymKey(cm.y,cm.m);
+  D.recurring.push({id:'r'+uid(),d,cat:document.getElementById('rc').value,amt:a,pb,sp:spP,ss:spS,from});
   ss();closeM();render();toast('Added ✓');
 }
 function openEditRec(id){
@@ -807,17 +824,31 @@ function openEditRec(id){
 }
 function subEditRec(id){
   const r=D.recurring.find(x=>x.id===id);if(!r)return;
-  r.d=document.getElementById('rd').value.trim();
-  r.amt=parseInt(document.getElementById('ra').value)||r.amt;
-  r.cat=document.getElementById('rc').value;
-  r.pb=document.getElementById('rpb').value;
   const sp=document.getElementById('rsp').value;
   const spMap={i:[D.splitRatio.P,D.splitRatio.S],'5':[50,50],P:[100,0],S:[0,100]};
   const [spP,spS]=spMap[sp]||spMap.i;
-  r.sp=spP;r.ss=spS;
+  const newAmt=parseInt(document.getElementById('ra').value)||r.amt;
+  const newCat=document.getElementById('rc').value;
+  const newPb=document.getElementById('rpb').value;
+  const newD=document.getElementById('rd').value.trim();
+  const cur=ymKey(cm.y,cm.m);
+  // if amount, split or paid-by changed, close old from this month and create new
+  if(newAmt!==r.amt||spP!==r.sp||newPb!==r.pb){
+    r.to=cur; // close old entry: stops showing from this month
+    D.recurring.push({id:'r'+uid(),d:newD||r.d,cat:newCat,amt:newAmt,pb:newPb,sp:spP,ss:spS,from:cur});
+  } else {
+    // only name/category changed — update in place (no financial impact)
+    r.d=newD||r.d;
+    r.cat=newCat;
+  }
   ss();closeM();render();toast('Saved ✓');
 }
-function delRec(id){if(!confirm('Delete?'))return;D.recurring=D.recurring.filter(x=>x.id!==id);ss();closeM();render();}
+function delRec(id){
+  if(!confirm('Delete from this month onwards?'))return;
+  const r=D.recurring.find(x=>x.id===id);if(!r)return;
+  r.to=ymKey(cm.y,cm.m); // stop showing from current month onward
+  ss();closeM();render();toast('Deleted from '+MN[cm.m]+' onwards');
+}
 
 // ── CATEGORIES ───────────────────────────────
 function subcatListHtml(c){
