@@ -201,7 +201,7 @@ const today=()=>new Date().toISOString().split('T')[0];
 const gCat=id=>(D.categories||[]).find(c=>c.id===id)||{n:id,i:'📌',c:'#8890AA'};
 
 let cu='P', ctab='exp', cm={y:new Date().getFullYear(),m:new Date().getMonth()};
-let FB_URL = '';
+let FB_URL = 'https://budgeting-9de34-default-rtdb.firebaseio.com';
 
 // ── DEFAULT DATA ──────────────────────────────
 let D = {
@@ -640,19 +640,10 @@ async function init(){
 }
 
 (async()=>{
-  // Register service worker
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
-  // Check for saved Firebase URL
-  const savedUrl=localStorage.getItem('psb-fburl');
-  if(savedUrl){
-    FB_URL=savedUrl;
-    await init();
-  } else {
-    // Show setup screen
-    document.getElementById('setup').style.display='flex';
-  }
+  await init();
 })();
 </script>
 </body>
