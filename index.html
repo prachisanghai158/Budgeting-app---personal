@@ -192,6 +192,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
         <span style="font-size:11px;font-weight:600;color:var(--primary-dark)">💰 P&amp;S Budget</span>
         <span id="syncst" style="font-size:11px;color:var(--on-surface-variant)">Loading…</span>
         <span id="swsyncst" style="font-size:11px;display:none"></span>
+        <span style="font-size:11px;color:var(--primary-dark);cursor:pointer;font-weight:500" onclick="swSyncNow()" id="sw-topbar-btn" style="display:none">↕ SW</span>
         <span style="font-size:11px;color:var(--primary-dark);cursor:pointer;font-weight:500" onclick="pullLatest()">🔄 Refresh</span>
       </div>
     </div>
@@ -369,6 +370,8 @@ async function pullLatest(){
     }
     setSyncStatus('ok','Synced');
   }catch(e){setSyncStatus('error','Refresh failed');toast('Could not reach cloud');}
+  // Also sync Splitwise after refreshing
+  await syncSplitwise();
 }
 
 // ── SPLITWISE ─────────────────────────────────
@@ -378,6 +381,9 @@ function setSwSyncStatus(s,msg){
   el.style.display=msg?'inline':'none';
   el.textContent=msg||'';
   el.style.color=s==='error'?'var(--error)':s==='syncing'?'var(--amber)':'var(--primary-dark)';
+  // Show/hide the SW sync button in topbar based on connection status
+  const swBtn=document.getElementById('sw-topbar-btn');
+  if(swBtn)swBtn.style.display=(D.sw&&D.sw.groupId)?'inline':'none';
 }
 const _swCats={
   'food':'food','food and drink':'food','food & drink':'food','restaurant':'food','dining':'food','coffee':'food','drinks':'food',
@@ -1336,13 +1342,13 @@ function _doExcelExport(){
     XLSX.utils.book_append_sheet(wb,'Settings',wsSett);
     // Budgets
     const budRows=[['Category','Monthly Budget (Rs)']];
-    (D.budgets||[]).forEach(b=>{const ci=gCat(b.cat);budRows.push([ci.n,b.b]);});
+    (D.budgets||[]).forEach(b=>{const ci=gCat(b.cat);budRows.push([String(ci.n||''),Number(b.b)||0]);});
     const wsBud=XLSX.utils.aoa_to_sheet(budRows);wsBud['!cols']=[{wch:24},{wch:20}];
     XLSX.utils.book_append_sheet(wb,'Budgets',wsBud);
     // Investments
     const invRows=[['ID','Name','Person','Amount Invested (Rs)','Target (Rs)']];
     (D.investments||[]).forEach(i=>{
-      invRows.push([i.id,i.n,i.p==='P'?D.names.P:i.p==='S'?D.names.S:'Joint',i.amt,i.tgt]);
+      invRows.push([String(i.id||''),String(i.n||''),i.p==='P'?D.names.P:i.p==='S'?D.names.S:'Joint',Number(i.amt)||0,Number(i.tgt)||0]);
     });
     const wsInv=XLSX.utils.aoa_to_sheet(invRows);wsInv['!cols']=[{wch:14},{wch:28},{wch:12},{wch:20},{wch:14}];
     XLSX.utils.book_append_sheet(wb,'Investments',wsInv);
@@ -1350,7 +1356,7 @@ function _doExcelExport(){
     const loanRows=[['ID','Loan Name','Owner','EMI/Month (Rs)','Interest Rate %','Original Principal (Rs)','Current Outstanding (Rs)']];
     (D.loans||[]).forEach(l=>{
       const who=l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
-      loanRows.push([l.id,l.n,who,l.emi,l.rate,l.principal||0,l.currentBalance||l.principal||0]);
+      loanRows.push([String(l.id||''),String(l.n||''),who,Number(l.emi)||0,Number(l.rate)||0,Number(l.principal)||0,Number(l.currentBalance||l.principal)||0]);
     });
     const wsLoan=XLSX.utils.aoa_to_sheet(loanRows);wsLoan['!cols']=[{wch:14},{wch:22},{wch:10},{wch:16},{wch:16},{wch:22},{wch:24}];
     XLSX.utils.book_append_sheet(wb,'Loans',wsLoan);
@@ -1358,7 +1364,7 @@ function _doExcelExport(){
     const prepRows=[['Loan ID','Loan Name','Prepayment ID','Date (YYYY-MM-DD)','Amount (Rs)','Note']];
     (D.loans||[]).forEach(l=>{
       (l.prepayments||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(p=>{
-        prepRows.push([l.id,l.n,p.id,p.date,p.amt,p.note||'']);
+        prepRows.push([String(l.id||''),String(l.n||''),String(p.id||''),String(p.date||''),Number(p.amt)||0,String(p.note||'')]);
       });
     });
     const wsPrep=XLSX.utils.aoa_to_sheet(prepRows);wsPrep['!cols']=[{wch:14},{wch:24},{wch:14},{wch:18},{wch:14},{wch:24}];
@@ -1370,10 +1376,10 @@ function _doExcelExport(){
     const catRows2=[catHdr];
     (D.categories||[]).forEach(c=>{
       const subNames=(c.subs||[]).map(s=>s.n);
-      catRows2.push([c.n,c.i,c.c,...subNames,...Array(Math.max(0,subCols-subNames.length)).fill('')]);
+      catRows2.push([String(c.n||''),String(c.i||''),String(c.c||''),...subNames.map(s=>String(s||'')),...Array.from({length:Math.max(0,subCols-subNames.length)},()=>'')]);
     });
     const wsCat=XLSX.utils.aoa_to_sheet(catRows2);
-    wsCat['!cols']=[{wch:22},{wch:8},{wch:10},...Array(subCols).fill({wch:22})];
+    wsCat['!cols']=[{wch:22},{wch:8},{wch:10},...Array.from({length:subCols},()=>({wch:22}))];
     XLSX.utils.book_append_sheet(wb,'Categories',wsCat);
     // Expenses
     const expRows=[['ID','Date','Description','Category','Subcategory','Amount (Rs)','Paid By','P Split %','S Split %','Month']];
@@ -1381,7 +1387,7 @@ function _doExcelExport(){
       const cn=catMap[e.cat]?.n||e.cat;
       const sn=e.subcat?(catMap[e.cat]?.subs?.[e.subcat]||''):'';
       const pb=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'both';
-      expRows.push([e.id,e.date,e.d,cn,sn,e.amt,pb,e.sp,e.ss,e.date.slice(0,7)]);
+      expRows.push([String(e.id||''),String(e.date||''),String(e.d||''),String(cn||''),String(sn||''),Number(e.amt)||0,String(pb||''),Number(e.sp)||0,Number(e.ss)||0,String((e.date||'').slice(0,7))]);
     });
     const wsE=XLSX.utils.aoa_to_sheet(expRows);
     wsE['!cols']=[{wch:14},{wch:12},{wch:30},{wch:22},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10}];
@@ -1391,7 +1397,7 @@ function _doExcelExport(){
     (D.recurring||[]).filter(r=>!r.to).forEach(r=>{
       const cn=catMap[r.cat]?.n||r.cat;
       const pb=r.pb==='P'?D.names.P:r.pb==='S'?D.names.S:'both';
-      recRows.push([r.id,r.d,cn,r.amt,pb,r.sp,r.ss,r.from||'2020-01']);
+      recRows.push([String(r.id||''),String(r.d||''),String(cn||''),Number(r.amt)||0,String(pb||''),Number(r.sp)||0,Number(r.ss)||0,String(r.from||'2020-01')]);
     });
     const wsR=XLSX.utils.aoa_to_sheet(recRows);
     wsR['!cols']=[{wch:14},{wch:30},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14}];
