@@ -1310,192 +1310,327 @@ function markSettled(){const s=sCalc(),amt=Math.abs(s.net);if(amt<1){toast('Noth
 // ── EXPORT / IMPORT ──────────────────────────
 function exportJSON(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({_v:2,...D},null,2)],{type:'application/json'}));a.download='ps-budget-'+today()+'.json';a.click();toast('Exported ✓');}
 function importJSON(inp){const r=new FileReader();r.onload=e=>{try{const p=JSON.parse(e.target.result);const{_v,...data}=p;if(!data.expenses||!data.names){toast('Invalid file');return;}if(!confirm('Replace all data?'))return;D=migrate(data);ss();render();closeM();toast('Imported ✓');}catch{toast('Could not read file');}inp.value='';};r.readAsText(inp.files[0]);}
+// ── PURE JS EXCEL (no external library) ──────
+// Uses fflate (loaded once on demand) for ZIP compression.
+// Export builds Open XML (.xlsx) from scratch.
+// Import unzips and parses the XML directly.
+
+let _fflateReady = false;
+function _loadFflate(cb) {
+  if(_fflateReady && typeof fflate !== 'undefined') { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js';
+  s.onload = () => { _fflateReady = true; cb(); };
+  s.onerror = () => {
+    const s2 = document.createElement('script');
+    s2.src = 'https://unpkg.com/fflate@0.8.2/umd/index.js';
+    s2.onload = () => { _fflateReady = true; cb(); };
+    s2.onerror = () => toast('Could not load ZIP library — check internet');
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+}
+
+function _xe(v) {
+  if(v == null) return '';
+  return String(v)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
+}
+
+function _makeSheetXml(rows) {
+  const rowsXml = rows.map((row, ri) => {
+    const cellsXml = row.map((val, ci) => {
+      const col = ci < 26 ? String.fromCharCode(65 + ci) : 'A' + String.fromCharCode(65 + ci - 26);
+      const ref = col + (ri + 1);
+      if(val == null || val === '') return '';
+      if(typeof val === 'number' && isFinite(val)) {
+        return `<c r="${ref}"><v>${val}</v></c>`;
+      }
+      return `<c r="${ref}" t="inlineStr"><is><t>${_xe(val)}</t></is></c>`;
+    }).join('');
+    return `<row r="${ri+1}">${cellsXml}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+    + `<sheetData>${rowsXml}</sheetData></worksheet>`;
+}
+
+function _buildXlsx(sheets) {
+  // sheets = [{name, rows}]
+  const enc = new TextEncoder();
+  const files = {};
+
+  files['[Content_Types].xml'] = enc.encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    +`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+    +`<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
+    +`<Default Extension="xml" ContentType="application/xml"/>`
+    +`<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
+    +sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')
+    +`</Types>`
+  );
+
+  files['_rels/.rels'] = enc.encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    +`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+    +`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`
+    +`</Relationships>`
+  );
+
+  files['xl/workbook.xml'] = enc.encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    +`<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `
+    +`xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+    +`<sheets>`
+    +sheets.map((s,i)=>`<sheet name="${_xe(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')
+    +`</sheets></workbook>`
+  );
+
+  files['xl/_rels/workbook.xml.rels'] = enc.encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    +`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+    +sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')
+    +`</Relationships>`
+  );
+
+  sheets.forEach((s, i) => {
+    files[`xl/worksheets/sheet${i+1}.xml`] = enc.encode(_makeSheetXml(s.rows));
+  });
+
+  const zipped = fflate.zipSync(files, {level: 0});
+  return zipped;
+}
+
+function _downloadXlsx(bytes, filename) {
+  const blob = new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { try{document.body.removeChild(a);}catch(x){} URL.revokeObjectURL(url); }, 3000);
+}
+
 function exportCSV(){
   const catMap={};(D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
   const rows=[['Date','Description','Category','Subcategory','Amount','Paid By','P%','S%','Month']];
   (D.expenses||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(e=>{
     const cn=catMap[e.cat]?.n||e.cat;
     const sn=e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';
-    rows.push([e.date,'"'+e.d.replace(/"/g,'""')+'"',cn,sn,e.amt,e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Both',e.sp,e.ss,e.date.slice(0,7)]);
+    rows.push([e.date,e.d,cn,sn,e.amt,e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Both',e.sp,e.ss,(e.date||'').slice(0,7)]);
   });
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));
-  a.download='ps-expenses-'+today()+'.csv';
-  a.click();
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(v=>typeof v==='string'&&v.includes(',')?'"'+v.replace(/"/g,'""')+'"':v).join(',')).join('\n')],{type:'text/csv'}));
+  a.download='ps-expenses-'+today()+'.csv'; a.click();
   toast('CSV exported');
 }
 
 function exportExcel(){
-  const doExport=()=>{
-    const catMap={};
-    (D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
-    const wb=XLSX.utils.book_new();
+  _loadFflate(() => {
+    try {
+      const catMap={};
+      (D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
 
-    // 1. Settings
-    const wsSett=XLSX.utils.aoa_to_sheet([
-      ['Field','Value','Notes'],
-      ['Person 1 Name',D.names.P,''],
-      ['Person 2 Name',D.names.S,''],
-      ['Person 1 Monthly Income',D.inflows.P,'Rs per month'],
-      ['Person 2 Monthly Income',D.inflows.S,'Rs per month'],
-      ['Person 1 Split %',D.splitRatio.P,'Must add up to 100 with Person 2'],
-      ['Person 2 Split %',D.splitRatio.S,''],
-      ['Person 1 Investment Target',D.invTargets.P,'Rs per month'],
-      ['Person 2 Investment Target',D.invTargets.S,'Rs per month'],
-      ['Loan Prepayment Target',D.prepTarget,'Rs per month (joint)'],
-    ]);
-    wsSett['!cols']=[{wch:28},{wch:20},{wch:35}];
-    XLSX.utils.book_append_sheet(wb,'Settings',wsSett);
+      const sheets = [];
 
-    // 2. Budgets
-    const budRows=[['Category','Monthly Budget (Rs)']];
-    (D.budgets||[]).forEach(b=>{const ci=gCat(b.cat);budRows.push([ci.n,b.b]);});
-    const wsBud=XLSX.utils.aoa_to_sheet(budRows);
-    wsBud['!cols']=[{wch:24},{wch:20}];
-    XLSX.utils.book_append_sheet(wb,'Budgets',wsBud);
+      // 1. Settings
+      sheets.push({name:'Settings', rows:[
+        ['Field','Value','Notes'],
+        ['Person 1 Name', D.names.P, ''],
+        ['Person 2 Name', D.names.S, ''],
+        ['Person 1 Monthly Income', D.inflows.P, 'Rs per month'],
+        ['Person 2 Monthly Income', D.inflows.S, 'Rs per month'],
+        ['Person 1 Split %', D.splitRatio.P, 'Must add up to 100 with Person 2'],
+        ['Person 2 Split %', D.splitRatio.S, ''],
+        ['Person 1 Investment Target', D.invTargets.P, 'Rs per month'],
+        ['Person 2 Investment Target', D.invTargets.S, 'Rs per month'],
+        ['Loan Prepayment Target', D.prepTarget, 'Rs per month (joint)'],
+      ]});
 
-    // 3. Investments
-    const invRows=[['ID','Name','Person','Amount Invested (Rs)','Target (Rs)']];
-    (D.investments||[]).forEach(i=>{
-      invRows.push([i.id,i.n,i.p==='P'?D.names.P:i.p==='S'?D.names.S:'Joint',i.amt,i.tgt]);
-    });
-    const wsInv=XLSX.utils.aoa_to_sheet(invRows);
-    wsInv['!cols']=[{wch:14},{wch:28},{wch:12},{wch:20},{wch:14}];
-    XLSX.utils.book_append_sheet(wb,'Investments',wsInv);
+      // 2. Budgets
+      const budRows = [['Category','Monthly Budget (Rs)']];
+      (D.budgets||[]).forEach(b => { const ci=gCat(b.cat); budRows.push([ci.n, b.b]); });
+      sheets.push({name:'Budgets', rows:budRows});
 
-    // 4. Loans
-    const loanRows=[['ID','Loan Name','Owner','EMI / Month (Rs)','Interest Rate %','Original Principal (Rs)','Current Outstanding (Rs)']];
-    (D.loans||[]).forEach(l=>{
-      const who=l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
-      loanRows.push([l.id,l.n,who,l.emi,l.rate,l.principal||0,l.currentBalance||l.principal||0]);
-    });
-    const wsLoan=XLSX.utils.aoa_to_sheet(loanRows);
-    wsLoan['!cols']=[{wch:14},{wch:24},{wch:10},{wch:18},{wch:16},{wch:22},{wch:24}];
-    XLSX.utils.book_append_sheet(wb,'Loans',wsLoan);
-
-    // 5. Prepayments
-    const prepRows=[['Loan ID','Loan Name','Prepayment ID','Date (YYYY-MM-DD)','Amount (Rs)','Note']];
-    (D.loans||[]).forEach(l=>{
-      (l.prepayments||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(p=>{
-        prepRows.push([l.id,l.n,p.id,p.date,p.amt,p.note||'']);
+      // 3. Investments
+      const invRows = [['ID','Name','Person','Amount Invested (Rs)','Target (Rs)']];
+      (D.investments||[]).forEach(i => {
+        invRows.push([i.id, i.n, i.p==='P'?D.names.P:i.p==='S'?D.names.S:'Joint', i.amt, i.tgt]);
       });
-    });
-    const wsPrep=XLSX.utils.aoa_to_sheet(prepRows);
-    wsPrep['!cols']=[{wch:14},{wch:24},{wch:14},{wch:18},{wch:14},{wch:24}];
-    XLSX.utils.book_append_sheet(wb,'Prepayments',wsPrep);
+      sheets.push({name:'Investments', rows:invRows});
 
-    // 6. Categories
-    const maxSubs=Math.max(0,...(D.categories||[]).map(c=>(c.subs||[]).length));
-    const subCols=Math.max(maxSubs,5);
-    const catHdr=['Category Name','Icon','Color',...Array.from({length:subCols},(_,i)=>'Subcategory '+(i+1))];
-    const catRows=[catHdr];
-    (D.categories||[]).forEach(c=>{
-      const subNames=(c.subs||[]).map(s=>s.n);
-      catRows.push([c.n,c.i,c.c,...subNames,...Array.from({length:Math.max(0,subCols-subNames.length)},()=>'')]);
-    });
-    const wsCat=XLSX.utils.aoa_to_sheet(catRows);
-    wsCat['!cols']=[{wch:22},{wch:6},{wch:10},...Array.from({length:subCols},()=>({wch:22}))];
-    XLSX.utils.book_append_sheet(wb,'Categories',wsCat);
+      // 4. Loans
+      const loanRows = [['ID','Loan Name','Owner','EMI / Month (Rs)','Interest Rate %','Original Principal (Rs)','Current Outstanding (Rs)']];
+      (D.loans||[]).forEach(l => {
+        const who = l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
+        loanRows.push([l.id, l.n, who, l.emi, l.rate, l.principal||0, l.currentBalance||l.principal||0]);
+      });
+      sheets.push({name:'Loans', rows:loanRows});
 
-    // 7. Expenses
-    const expRows=[['ID','Date','Description','Category','Subcategory','Amount (Rs)','Paid By','P Split %','S Split %','Month']];
-    (D.expenses||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(e=>{
-      const cn=catMap[e.cat]?.n||e.cat;
-      const sn=e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';
-      const pb=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'both';
-      expRows.push([e.id,e.date,e.d,cn,sn,e.amt,pb,e.sp,e.ss,(e.date||'').slice(0,7)]);
-    });
-    const wsE=XLSX.utils.aoa_to_sheet(expRows);
-    wsE['!cols']=[{wch:14},{wch:12},{wch:30},{wch:22},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10}];
-    XLSX.utils.book_append_sheet(wb,'Expenses',wsE);
+      // 5. Prepayments
+      const prepRows = [['Loan ID','Loan Name','Prepayment ID','Date (YYYY-MM-DD)','Amount (Rs)','Note']];
+      (D.loans||[]).forEach(l => {
+        (l.prepayments||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(p => {
+          prepRows.push([l.id, l.n, p.id, p.date, p.amt, p.note||'']);
+        });
+      });
+      sheets.push({name:'Prepayments', rows:prepRows});
 
-    // 8. Recurring
-    const recRows=[['ID','Description','Category','Amount (Rs)','Paid By','P Split %','S Split %','From Month']];
-    (D.recurring||[]).filter(r=>!r.to).forEach(r=>{
-      const cn=catMap[r.cat]?.n||r.cat;
-      const pb=r.pb==='P'?D.names.P:r.pb==='S'?D.names.S:'both';
-      recRows.push([r.id,r.d,cn,r.amt,pb,r.sp,r.ss,r.from||'2020-01']);
-    });
-    const wsR=XLSX.utils.aoa_to_sheet(recRows);
-    wsR['!cols']=[{wch:14},{wch:30},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14}];
-    XLSX.utils.book_append_sheet(wb,'Recurring',wsR);
+      // 6. Categories
+      const maxSubs = Math.max(0, ...(D.categories||[]).map(c=>(c.subs||[]).length));
+      const subCols = Math.max(maxSubs, 5);
+      const catHdr = ['Category Name','Icon','Color', ...Array.from({length:subCols},(_,i)=>'Subcategory '+(i+1))];
+      const catRows = [catHdr];
+      (D.categories||[]).forEach(c => {
+        const subNames = (c.subs||[]).map(s=>s.n);
+        catRows.push([c.n, c.i, c.c, ...subNames, ...Array.from({length:Math.max(0,subCols-subNames.length)},()=>'')]);
+      });
+      sheets.push({name:'Categories', rows:catRows});
 
-    // 9. Instructions
-    const instrRows=[
-      ['P&S Budget — Full Replace Import Guide'],[''],
-      ['IMPORTANT: Uploading this file REPLACES ALL app data.'],
-      ['Always export fresh from the app before editing, then import back.'],[''],
-      ['SETTINGS — names, income, split %, investment targets'],
-      ['BUDGETS — monthly budget per category'],
-      ['INVESTMENTS — full list, all rows replaced on import'],
-      ['LOANS — Current Outstanding = balance from your latest bank statement'],
-      ['PREPAYMENTS — one row per prepayment. Loan ID must match Loans sheet.'],
-      ['   Date: YYYY-MM-DD. Leave Prepayment ID blank for new entries.'],
-      ['CATEGORIES — icon in col B, hex color in col C, subcategories in D, E, F...'],
-      ['EXPENSES — Date: YYYY-MM-DD. Paid By: '+D.names.P+' / '+D.names.S+' / both'],
-      ['RECURRING — active items only. From Month: YYYY-MM'],[''],
-      ['After import the app syncs to Firebase so both phones update instantly.'],
-    ];
-    const wsI=XLSX.utils.aoa_to_sheet(instrRows);
-    wsI['!cols']=[{wch:80}];
-    XLSX.utils.book_append_sheet(wb,'Instructions',wsI);
+      // 7. Expenses
+      const expRows = [['ID','Date','Description','Category','Subcategory','Amount (Rs)','Paid By','P Split %','S Split %','Month']];
+      (D.expenses||[]).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(e => {
+        const cn = catMap[e.cat]?.n||e.cat;
+        const sn = e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';
+        const pb = e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'both';
+        expRows.push([e.id, e.date, e.d, cn, sn, e.amt, pb, e.sp, e.ss, (e.date||'').slice(0,7)]);
+      });
+      sheets.push({name:'Expenses', rows:expRows});
 
-    // Write & download
-    try{
-      const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-      const blob=new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      a.href=url;
-      a.download='PS_Budget_'+today()+'.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},2000);
+      // 8. Recurring
+      const recRows = [['ID','Description','Category','Amount (Rs)','Paid By','P Split %','S Split %','From Month']];
+      (D.recurring||[]).filter(r=>!r.to).forEach(r => {
+        const cn = catMap[r.cat]?.n||r.cat;
+        const pb = r.pb==='P'?D.names.P:r.pb==='S'?D.names.S:'both';
+        recRows.push([r.id, r.d, cn, r.amt, pb, r.sp, r.ss, r.from||'2020-01']);
+      });
+      sheets.push({name:'Recurring', rows:recRows});
+
+      // 9. Instructions
+      sheets.push({name:'Instructions', rows:[
+        ['P&S Budget — Full Replace Import Guide'],
+        [''],
+        ['IMPORTANT: Uploading this file REPLACES ALL app data.'],
+        ['Always export fresh before editing, then import back.'],
+        [''],
+        ['SETTINGS — names, income, split %, investment targets'],
+        ['BUDGETS — monthly budget per category'],
+        ['INVESTMENTS — full list, replaced on import'],
+        ['LOANS — Current Outstanding = balance from your latest bank statement'],
+        ['PREPAYMENTS — one per row, Loan ID must match Loans sheet, Date: YYYY-MM-DD'],
+        ['CATEGORIES — icon col B, hex color col C, subcategories in cols D onwards'],
+        ['EXPENSES — Date YYYY-MM-DD, Paid By: '+D.names.P+' / '+D.names.S+' / both'],
+        ['RECURRING — active items only, From Month: YYYY-MM'],
+        [''],
+        ['After import, app syncs to Firebase so both phones update instantly.'],
+      ]});
+
+      const bytes = _buildXlsx(sheets);
+      _downloadXlsx(bytes, 'PS_Budget_'+today()+'.xlsx');
       toast('Excel exported!');
-    }catch(err){
-      console.error('Excel export error:',err);
-      toast('Export failed: '+err.message);
+    } catch(err) {
+      console.error('Excel export error:', err);
+      toast('Export failed: ' + err.message);
     }
-  };
-  if(window.XLSX){doExport();}
-  else{
-    toast('Loading Excel library…');
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload=doExport;
-    s.onerror=()=>{
-      const s2=document.createElement('script');
-      s2.src='https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js';
-      s2.onload=doExport;
-      s2.onerror=()=>toast('Could not load Excel library — check internet');
-      document.head.appendChild(s2);
-    };
-    document.head.appendChild(s);
-  }
+  });
 }
 
 function importExcel(inp){
-  const file=inp.files[0];if(!file)return;
-  const doImport=()=>{
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      try{
-        const wb=XLSX.read(ev.target.result,{type:'array'});
+  const file = inp.files[0]; if(!file) return;
+  _loadFflate(() => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
         if(!confirm('This will REPLACE ALL app data with the Excel contents. Are you sure?')){inp.value='';return;}
 
-        const findHdr=(rows,kw)=>{for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].join('').toLowerCase().includes(kw))return i;}return -1;};
-        const parseNum=v=>parseFloat(String(v||'0').replace(/[^\d.-]/g,''))||0;
-        const parseStr=v=>String(v||'').trim();
+        const bytes = new Uint8Array(ev.target.result);
+        const unzipped = fflate.unzipSync(bytes);
+        const dec = new TextDecoder();
+
+        const getXml = path => unzipped[path] ? dec.decode(unzipped[path]) : null;
+
+        // Parse a worksheet XML into array of arrays
+        function parseSheet(xml) {
+          if(!xml) return [];
+          // Get all row elements
+          const rows = [];
+          const rowMatches = xml.match(/<row[^>]*>([\s\S]*?)<\/row>/g)||[];
+          rowMatches.forEach(rowXml => {
+            const rAttr = rowXml.match(/r="(\d+)"/);
+            const ri = rAttr ? parseInt(rAttr[1])-1 : rows.length;
+            while(rows.length <= ri) rows.push([]);
+            const row = rows[ri];
+            const cellMatches = rowXml.match(/<c[^>]*>[\s\S]*?<\/c>/g)||[];
+            cellMatches.forEach(cellXml => {
+              const refMatch = cellXml.match(/r="([A-Z]+)(\d+)"/);
+              if(!refMatch) return;
+              const colStr = refMatch[1];
+              let ci = 0;
+              for(let k=0; k<colStr.length; k++) ci = ci*26 + colStr.charCodeAt(k)-64;
+              ci -= 1;
+              while(row.length <= ci) row.push('');
+              const isInline = /t="inlineStr"/.test(cellXml);
+              const isStr = /t="s"/.test(cellXml);
+              if(isInline) {
+                const m = cellXml.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+                row[ci] = m ? m[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"') : '';
+              } else if(isStr) {
+                const m = cellXml.match(/<v>([\s\S]*?)<\/v>/);
+                const idx = m ? parseInt(m[1]) : 0;
+                // shared strings
+                const ssXml = getXml('xl/sharedStrings.xml');
+                if(ssXml) {
+                  const strs = ssXml.match(/<t[^>]*>([\s\S]*?)<\/t>/g)||[];
+                  const s = strs[idx];
+                  row[ci] = s ? s.replace(/<t[^>]*>|<\/t>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : '';
+                } else row[ci] = '';
+              } else {
+                const m = cellXml.match(/<v>([\s\S]*?)<\/v>/);
+                const raw = m ? m[1] : '';
+                const num = parseFloat(raw);
+                row[ci] = isNaN(num) ? raw : num;
+              }
+            });
+          });
+          return rows;
+        }
+
+        // Get sheet name → file mapping from workbook
+        const wbXml = getXml('xl/workbook.xml')||'';
+        const wbRels = getXml('xl/_rels/workbook.xml.rels')||'';
+        const sheetEls = wbXml.match(/<sheet [^/]*/g)||[];
+        const relEls = wbRels.match(/<Relationship [^/]*/g)||[];
+        const sheetMap = {}; // name → xml
+        sheetEls.forEach(el => {
+          const nameM = el.match(/name="([^"]+)"/);
+          const ridM = el.match(/r:id="([^"]+)"/);
+          if(!nameM||!ridM) return;
+          const name = nameM[1];
+          const rid = ridM[1];
+          const rel = relEls.find(r=>r.includes(`Id="${rid}"`));
+          if(!rel) return;
+          const tgtM = rel.match(/Target="([^"]+)"/);
+          if(!tgtM) return;
+          const path = 'xl/' + tgtM[1].replace(/^\//,'');
+          const xml = getXml(path);
+          if(xml) sheetMap[name] = parseSheet(xml);
+        });
+
+        const pStr = v => String(v==null?'':v).trim();
+        const pNum = v => parseFloat(String(v||'0').replace(/[^\d.-]/g,''))||0;
+        const findHdr = (rows,kw) => { for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i]&&rows[i].join('').toLowerCase().includes(kw))return i;} return -1; };
 
         let p1name=D.names.P, p2name=D.names.S;
 
         // 1. Settings
-        const wsSett=wb.Sheets['Settings'];
-        if(wsSett){
-          const rows=XLSX.utils.sheet_to_json(wsSett,{header:1,defval:''});
+        const settRows = sheetMap['Settings']||[];
+        if(settRows.length) {
           const map={};
-          rows.forEach(r=>{const k=parseStr(r[0]).toLowerCase(),v=parseStr(r[1]);if(k&&v)map[k]=v;});
-          const g=(k,d)=>map[k.toLowerCase()]!=null?map[k.toLowerCase()]:String(d);
+          settRows.forEach(r=>{const k=pStr(r[0]).toLowerCase(),v=pStr(r[1]);if(k&&v)map[k]=v;});
+          const g=(k,d)=>map[k]!=null?map[k]:String(d);
           p1name=g('person 1 name',D.names.P)||D.names.P;
           p2name=g('person 2 name',D.names.S)||D.names.S;
           D.names.P=p1name; D.names.S=p2name;
@@ -1510,212 +1645,61 @@ function importExcel(inp){
         const n2k={[p1name.toLowerCase()]:'P',[p2name.toLowerCase()]:'S','both':'both','joint':'joint'};
         const p2k={[p1name.toLowerCase()]:'P',[p2name.toLowerCase()]:'S','joint':'joint'};
 
-        // 2. Budgets (hold, apply after categories)
-        const wsBud=wb.Sheets['Budgets'];
-        if(wsBud){
-          const rows=XLSX.utils.sheet_to_json(wsBud,{header:1,defval:''});
-          const hdr=findHdr(rows,'category');
-          if(hdr>=0){
-            const newBudgets=[];
-            rows.slice(hdr+1).forEach(row=>{
-              const catName=parseStr(row[0]).toLowerCase();
-              const amt=parseNum(row[1]);
-              if(!catName||!amt)return;
-              newBudgets.push({catName,b:amt});
-            });
-            D._pendingBudgets=newBudgets;
-          }
-        }
+        // 2. Budgets (pending — apply after categories)
+        const budRows = sheetMap['Budgets']||[];
+        const pendingBudgets=[];
+        if(budRows.length){ const hdr=findHdr(budRows,'category'); if(hdr>=0){ budRows.slice(hdr+1).forEach(r=>{ const cn=pStr(r[0]).toLowerCase(),amt=pNum(r[1]); if(cn&&amt)pendingBudgets.push({catName:cn,b:amt}); }); } }
 
         // 3. Investments
-        const wsInv=wb.Sheets['Investments'];
-        if(wsInv){
-          const rows=XLSX.utils.sheet_to_json(wsInv,{header:1,defval:''});
-          const hdr=findHdr(rows,'name');
-          if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
-            const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('person')),amt:hdrs.findIndex(h=>h.includes('amount')||h.includes('invested')),tgt:hdrs.findIndex(h=>h.includes('target'))};
-            D.investments=[];
-            rows.slice(hdr+1).forEach(row=>{
-              const name=parseStr(row[ci.n]);
-              if(!name)return;
-              const p=p2k[parseStr(row[ci.p]).toLowerCase()]||'P';
-              const id=parseStr(row[ci.id])||'i'+uid();
-              D.investments.push({id,n:name,p,amt:parseNum(row[ci.amt]),tgt:parseNum(row[ci.tgt])});
-            });
-          }
-        }
+        const invRows = sheetMap['Investments']||[];
+        if(invRows.length){ const hdr=findHdr(invRows,'name'); if(hdr>=0){ const hdrs=invRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('person')),amt:hdrs.findIndex(h=>h.includes('amount')||h.includes('invested')),tgt:hdrs.findIndex(h=>h.includes('target'))}; D.investments=[]; invRows.slice(hdr+1).forEach(r=>{ const name=pStr(r[ci.n]); if(!name)return; D.investments.push({id:pStr(r[ci.id])||'i'+uid(),n:name,p:p2k[pStr(r[ci.p]).toLowerCase()]||'P',amt:pNum(r[ci.amt]),tgt:pNum(r[ci.tgt])}); }); } }
 
         // 4. Loans
-        const wsLoan=wb.Sheets['Loans'];
-        if(wsLoan){
-          const rows=XLSX.utils.sheet_to_json(wsLoan,{header:1,defval:''});
-          const hdr=findHdr(rows,'loan name');
-          if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
-            const ci={
-              id:hdrs.indexOf('id'),
-              n:hdrs.findIndex(h=>h.includes('loan name')||h.includes('name')),
-              p:hdrs.findIndex(h=>h.includes('owner')),
-              emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),
-              rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),
-              prin:hdrs.findIndex(h=>h.includes('original principal')||h.includes('original')),
-              curBal:hdrs.findIndex(h=>h.includes('current outstanding')||h.includes('outstanding')),
-            };
-            D.loans=[];
-            rows.slice(hdr+1).forEach(row=>{
-              const name=parseStr(row[ci.n]);
-              const emi=parseNum(row[ci.emi]);
-              if(!name||!emi)return;
-              const id=parseStr(row[ci.id])||'l'+uid();
-              const principal=ci.prin>=0?parseNum(row[ci.prin]):0;
-              const currentBalance=ci.curBal>=0?parseNum(row[ci.curBal]):principal;
-              D.loans.push({
-                id,n:name,emi,
-                rate:ci.rate>=0?parseFloat(parseStr(row[ci.rate]))||0:0,
-                principal,
-                currentBalance:currentBalance||principal,
-                p:n2k[parseStr(row[ci.p]).toLowerCase()]||'joint',
-                prepayments:[]
-              });
-            });
-          }
-        }
+        const loanRows = sheetMap['Loans']||[];
+        if(loanRows.length){ const hdr=findHdr(loanRows,'loan name'); if(hdr>=0){ const hdrs=loanRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('loan name')||h.includes('name')),p:hdrs.findIndex(h=>h.includes('owner')),emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),prin:hdrs.findIndex(h=>h.includes('original')),curBal:hdrs.findIndex(h=>h.includes('outstanding'))}; D.loans=[]; loanRows.slice(hdr+1).forEach(r=>{ const name=pStr(r[ci.n]),emi=pNum(r[ci.emi]); if(!name||!emi)return; const principal=ci.prin>=0?pNum(r[ci.prin]):0; const currentBalance=ci.curBal>=0?pNum(r[ci.curBal]):principal; D.loans.push({id:pStr(r[ci.id])||'l'+uid(),n:name,emi,rate:ci.rate>=0?parseFloat(pStr(r[ci.rate]))||0:0,principal,currentBalance:currentBalance||principal,p:n2k[pStr(r[ci.p]).toLowerCase()]||'joint',prepayments:[]}); }); } }
 
         // 5. Prepayments
-        const wsPrep=wb.Sheets['Prepayments'];
-        if(wsPrep){
-          const rows=XLSX.utils.sheet_to_json(wsPrep,{header:1,defval:''});
-          const hdr=findHdr(rows,'loan id');
-          if(hdr>=0){
-            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
-            const ci={lid:hdrs.findIndex(h=>h.includes('loan id')),pid:hdrs.findIndex(h=>h.includes('prepayment id')),date:hdrs.findIndex(h=>h.includes('date')),amt:hdrs.findIndex(h=>h.includes('amount')),note:hdrs.findIndex(h=>h.includes('note'))};
-            rows.slice(hdr+1).forEach(row=>{
-              const loanId=parseStr(row[ci.lid]);
-              const amt=parseNum(row[ci.amt]);
-              let dateRaw=parseStr(row[ci.date]);
-              if(!loanId||!amt)return;
-              if(/^\d+$/.test(dateRaw)){const d=XLSX.SSF.parse_date_code(parseInt(dateRaw));dateRaw=d.y+'-'+String(d.m).padStart(2,'0')+'-'+String(d.d).padStart(2,'0');}
-              const loan=D.loans.find(l=>l.id===loanId);
-              if(!loan)return;
-              loan.prepayments.push({id:parseStr(row[ci.pid])||'pp'+uid(),amt,date:dateRaw,note:ci.note>=0?parseStr(row[ci.note]):''});
-            });
-          }
-        }
+        const prepRows = sheetMap['Prepayments']||[];
+        if(prepRows.length){ const hdr=findHdr(prepRows,'loan id'); if(hdr>=0){ const hdrs=prepRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={lid:hdrs.findIndex(h=>h.includes('loan id')),pid:hdrs.findIndex(h=>h.includes('prepayment id')),date:hdrs.findIndex(h=>h.includes('date')),amt:hdrs.findIndex(h=>h.includes('amount')),note:hdrs.findIndex(h=>h.includes('note'))}; prepRows.slice(hdr+1).forEach(r=>{ const loanId=pStr(r[ci.lid]),amt=pNum(r[ci.amt]),dateRaw=pStr(r[ci.date]); if(!loanId||!amt||!dateRaw)return; const loan=D.loans.find(l=>l.id===loanId); if(!loan)return; loan.prepayments.push({id:pStr(r[ci.pid])||'pp'+uid(),amt,date:dateRaw,note:ci.note>=0?pStr(r[ci.note]):''}); }); } }
 
         // 6. Categories
-        const wsCat=wb.Sheets['Categories'];
-        if(wsCat){
-          const rows=XLSX.utils.sheet_to_json(wsCat,{header:1,defval:''});
-          const hdr=findHdr(rows,'category name');
-          if(hdr>=0){
-            D.categories=[];
-            rows.slice(hdr+1).forEach(row=>{
-              const catName=parseStr(row[0]);
-              if(!catName)return;
-              const icon=parseStr(row[1])||'📦';
-              const color=parseStr(row[2])||'#9CA3AF';
-              const subNames=row.slice(3).map(s=>parseStr(s)).filter(Boolean);
-              const id='c'+uid();
-              D.categories.push({id,n:catName,i:icon,c:color,subs:subNames.map(n=>({id:'s'+uid(),n}))});
-            });
-          }
-        }
+        const catRows = sheetMap['Categories']||[];
+        if(catRows.length){ const hdr=findHdr(catRows,'category name'); if(hdr>=0){ D.categories=[]; catRows.slice(hdr+1).forEach(r=>{ const catName=pStr(r[0]); if(!catName)return; const subs=r.slice(3).map(s=>pStr(s)).filter(Boolean).map(n=>({id:'s'+uid(),n})); D.categories.push({id:'c'+uid(),n:catName,i:pStr(r[1])||'📦',c:pStr(r[2])||'#9CA3AF',subs}); }); } }
 
-        // Apply pending budgets now that categories are loaded
+        // Apply budgets now categories exist
         const catMapI={};
-        D.categories.forEach(c=>{
-          catMapI[c.n.toLowerCase()]=c.id;
-          (c.subs||[]).forEach(s=>{catMapI[c.id+'::'+s.n.toLowerCase()]=s.id;});
-        });
-        if(D._pendingBudgets){
-          D.budgets=D._pendingBudgets.map(b=>({cat:catMapI[b.catName]||b.catName,b:b.b})).filter(b=>b.cat);
+        D.categories.forEach(c=>{ catMapI[c.n.toLowerCase()]=c.id; (c.subs||[]).forEach(s=>{catMapI[c.id+'::'+s.n.toLowerCase()]=s.id;}); });
+        if(pendingBudgets.length){
+          D.budgets=pendingBudgets.map(b=>({cat:catMapI[b.catName]||b.catName,b:b.b})).filter(b=>b.cat);
           D.categories.forEach(c=>{if(!D.budgets.find(b=>b.cat===c.id))D.budgets.push({cat:c.id,b:5000});});
-          delete D._pendingBudgets;
         }
 
         // 7. Expenses
-        const wsE=wb.Sheets['Expenses'];
-        if(wsE){
-          const rows=XLSX.utils.sheet_to_json(wsE,{header:1,defval:''});
-          const hdr=findHdr(rows,'description');
-          if(hdr>=0){
-            D.expenses=[];
-            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
-            const ci={id:hdrs.indexOf('id'),date:hdrs.findIndex(h=>h.includes('date')),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')&&!h.includes('sub')),subcat:hdrs.findIndex(h=>h.includes('sub')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')||h==='p%'),ss:hdrs.findIndex(h=>h.includes('s split')||h==='s%')};
-            rows.slice(hdr+1).forEach(row=>{
-              const desc=parseStr(row[ci.desc]);
-              let dateRaw=parseStr(row[ci.date]);
-              const amt=parseNum(row[ci.amt]);
-              if(!desc||!dateRaw||!amt)return;
-              if(/^\d+$/.test(dateRaw)){const d=XLSX.SSF.parse_date_code(parseInt(dateRaw));dateRaw=d.y+'-'+String(d.m).padStart(2,'0')+'-'+String(d.d).padStart(2,'0');}
-              const id=parseStr(row[ci.id])||'e'+uid();
-              const catId=catMapI[parseStr(row[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc');
-              const subId=catMapI[catId+'::'+parseStr(row[ci.subcat]).toLowerCase()]||'';
-              const pb=n2k[parseStr(row[ci.pb]).toLowerCase()]||'both';
-              const sp=ci.sp>=0?Math.min(100,Math.max(0,parseInt(row[ci.sp])||0)):D.splitRatio.P;
-              const ss=ci.ss>=0?Math.min(100,Math.max(0,parseInt(row[ci.ss])||0)):D.splitRatio.S;
-              const exp={id,d:desc,cat:catId,amt,pb,date:dateRaw,sp,ss,by:'P'};
-              if(subId)exp.subcat=subId;
-              D.expenses.push(exp);
-            });
-          }
-        }
+        const expRows = sheetMap['Expenses']||[];
+        if(expRows.length){ const hdr=findHdr(expRows,'description'); if(hdr>=0){ D.expenses=[]; const hdrs=expRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),date:hdrs.findIndex(h=>h.includes('date')),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')&&!h.includes('sub')),subcat:hdrs.findIndex(h=>h.includes('sub')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')||h==='p%'),ss:hdrs.findIndex(h=>h.includes('s split')||h==='s%')}; expRows.slice(hdr+1).forEach(r=>{ const desc=pStr(r[ci.desc]),dateRaw=pStr(r[ci.date]),amt=pNum(r[ci.amt]); if(!desc||!dateRaw||!amt)return; const catId=catMapI[pStr(r[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc'); const subId=catMapI[catId+'::'+pStr(r[ci.subcat]).toLowerCase()]||''; const pb=n2k[pStr(r[ci.pb]).toLowerCase()]||'both'; const sp=ci.sp>=0?Math.min(100,Math.max(0,parseInt(r[ci.sp])||0)):D.splitRatio.P; const ss=ci.ss>=0?Math.min(100,Math.max(0,parseInt(r[ci.ss])||0)):D.splitRatio.S; const exp={id:pStr(r[ci.id])||'e'+uid(),d:desc,cat:catId,amt,pb,date:dateRaw,sp,ss,by:'P'}; if(subId)exp.subcat=subId; D.expenses.push(exp); }); } }
 
         // 8. Recurring
-        const wsRec=wb.Sheets['Recurring'];
-        if(wsRec){
-          const rows=XLSX.utils.sheet_to_json(wsRec,{header:1,defval:''});
-          const hdr=findHdr(rows,'description');
-          if(hdr>=0){
-            D.recurring=[];
-            const hdrs=rows[hdr].map(h=>parseStr(h).toLowerCase());
-            const ci={id:hdrs.indexOf('id'),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')),ss:hdrs.findIndex(h=>h.includes('s split')),from:hdrs.findIndex(h=>h.includes('from'))};
-            rows.slice(hdr+1).forEach(row=>{
-              const desc=parseStr(row[ci.desc]);
-              const amt=parseNum(row[ci.amt]);
-              if(!desc||!amt)return;
-              const id=parseStr(row[ci.id])||'r'+uid();
-              const catId=catMapI[parseStr(row[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc');
-              const pb=n2k[parseStr(row[ci.pb]).toLowerCase()]||'both';
-              const sp=ci.sp>=0?parseInt(row[ci.sp])||50:50;
-              const ss=ci.ss>=0?parseInt(row[ci.ss])||50:50;
-              const from=parseStr(row[ci.from])||ymKey(cm.y,cm.m);
-              D.recurring.push({id,d:desc,cat:catId,amt,pb,sp,ss,from});
-            });
-          }
-        }
+        const recRows = sheetMap['Recurring']||[];
+        if(recRows.length){ const hdr=findHdr(recRows,'description'); if(hdr>=0){ D.recurring=[]; const hdrs=recRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')),ss:hdrs.findIndex(h=>h.includes('s split')),from:hdrs.findIndex(h=>h.includes('from'))}; recRows.slice(hdr+1).forEach(r=>{ const desc=pStr(r[ci.desc]),amt=pNum(r[ci.amt]); if(!desc||!amt)return; const catId=catMapI[pStr(r[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc'); const pb=n2k[pStr(r[ci.pb]).toLowerCase()]||'both'; const sp=ci.sp>=0?parseInt(r[ci.sp])||50:50; const ss=ci.ss>=0?parseInt(r[ci.ss])||50:50; D.recurring.push({id:pStr(r[ci.id])||'r'+uid(),d:desc,cat:catId,amt,pb,sp,ss,from:pStr(r[ci.from])||ymKey(cm.y,cm.m)}); }); } }
 
-        ss();render();
-        toast('Data replaced — syncing to Firebase…');
+        ss(); render();
+        toast('Data replaced — syncing…');
         setTimeout(async()=>{
           try{
-            const r=await fetch(FB_URL+'/psbudget.json',{method:'PUT',body:JSON.stringify({...D,_t:Date.now()}),headers:{'Content-Type':'application/json'}});
-            setSyncStatus(r.ok?'ok':'error',r.ok?'Synced':'Sync failed');
-            if(r.ok)toast('Synced to Firebase!');
+            const res=await fetch(FB_URL+'/psbudget.json',{method:'PUT',body:JSON.stringify({...D,_t:Date.now()}),headers:{'Content-Type':'application/json'}});
+            setSyncStatus(res.ok?'ok':'error',res.ok?'Synced':'Sync failed');
+            if(res.ok)toast('Synced to Firebase!');
           }catch(e){setSyncStatus('error','Offline');toast('Saved locally, no internet');}
         },100);
 
-      }catch(err){console.error(err);toast('Could not read Excel: '+err.message);}
+      } catch(err) {
+        console.error('Excel import error:', err);
+        toast('Could not read Excel: '+err.message);
+      }
       inp.value='';
     };
     reader.readAsArrayBuffer(file);
-  };
-  if(window.XLSX){doImport();}
-  else{
-    toast('Loading Excel library…');
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload=doImport;
-    s.onerror=()=>{
-      const s2=document.createElement('script');
-      s2.src='https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js';
-      s2.onload=doImport;
-      s2.onerror=()=>toast('Could not load Excel library — check internet');
-      document.head.appendChild(s2);
-    };
-    document.head.appendChild(s);
-  }
+  });
 }
 
 function chMonth(d){cm.m+=d;if(cm.m>11){cm.m=0;cm.y++;}if(cm.m<0){cm.m=11;cm.y--;}render();}
@@ -1727,12 +1711,8 @@ function ss(){save();}
   if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
   document.getElementById('imp').addEventListener('change',function(){importJSON(this);});
   document.getElementById('imp-xl').addEventListener('change',function(){importExcel(this);});
-  if(typeof XLSX==='undefined'){
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    s.onerror=()=>{const s2=document.createElement('script');s2.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';document.head.appendChild(s2);};
-    document.head.appendChild(s);
-  }
+  // Preload fflate for fast Excel export/import
+  _loadFflate(()=>{});
   await load();
   setView('H');
 })();
