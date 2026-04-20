@@ -60,7 +60,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .hero{margin:12px 16px 8px;background:var(--surface);border-radius:var(--r);padding:16px;flex-shrink:0;box-shadow:var(--shadow-card)}
 .hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px}
 .hero-kpi{min-width:0}
-.hval{display:flex;align-items:flex-start;font-size:1.85rem;font-weight:700;font-family:'Nunito','Inter',sans-serif;letter-spacing:-0.02em;line-height:1.1;color:var(--on-surface);white-space:nowrap}
+.hval{display:flex;align-items:flex-start;font-size:1.85rem;font-weight:500;font-family:'Nunito','Inter',sans-serif;letter-spacing:-0.02em;line-height:1.1;color:var(--on-surface);white-space:nowrap}
 .hcur,.hdec,.hsign{font-size:.85rem;line-height:1.4;color:var(--on-surface-variant);font-family:'Nunito','Inter',sans-serif;font-weight:700}
 .hcur{margin:2px 2px 0 0}.hdec{margin:2px 0 0 2px}.hsign{margin:2px 2px 0 0}
 .hlbl{font-size:11px;color:var(--on-surface-variant);margin-bottom:4px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.06em}
@@ -72,7 +72,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .ms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .ms-item{background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)}
 .ms-lbl{font-size:11px;color:var(--on-surface-variant);margin-bottom:3px;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em}
-.ms-val{font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif}
+.ms-val{font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif}
 .rv{color:var(--error)}.gv{color:var(--primary-dark)}.av{color:var(--amber)}
 /* Tabs */
 .tabs{display:flex;padding:4px 16px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;gap:2px;background:var(--surface);border-bottom:1px solid var(--outline-variant)}
@@ -93,7 +93,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .ename{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .emeta{font-size:11px;color:var(--on-surface-variant);margin-top:2px}
 .eright{text-align:right;flex-shrink:0}
-.eamt{font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif}
+.eamt{font-size:14px;font-weight:400;font-family:'Nunito','Inter',sans-serif}
 .ewho{font-size:10px;padding:2px 7px;border-radius:var(--r-full);margin-top:3px;display:inline-block}
 .wp{background:rgba(91,197,167,.12);color:var(--primary-dark)}.ws{background:rgba(61,133,204,.12);color:var(--secondary)}.wb{background:rgba(245,158,11,.1);color:#B45309}
 .rec-badge{font-size:9px;padding:2px 6px;border-radius:var(--r-full);background:rgba(245,158,11,.1);color:#B45309;margin-left:4px;vertical-align:middle}
@@ -128,7 +128,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .cbar{height:100%;border-radius:var(--r-full);transition:width .6s}
 /* Settle */
 .sc{background:linear-gradient(135deg,rgba(91,197,167,.08),rgba(61,133,204,.06));border-radius:var(--r);padding:20px;text-align:center;margin-bottom:10px;border:1px solid var(--outline-variant)}
-.samt{font-size:30px;font-weight:700;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark);margin:6px 0;letter-spacing:-0.02em}
+.samt{font-size:30px;font-weight:500;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark);margin:6px 0;letter-spacing:-0.02em}
 /* Invest */
 .iitem{display:flex;justify-content:space-between;align-items:center;padding:10px 0;cursor:pointer}
 .iname{font-size:13px;font-weight:500}
@@ -164,7 +164,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .ind-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--outline-variant)}
 .ind-row:last-child{border-bottom:none}
 .ind-lbl{font-size:12px;color:var(--on-surface-variant)}
-.ind-val{font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif}
+.ind-val{font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif}
 /* Chart */
 .chart-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
 .chart-wrap::-webkit-scrollbar{display:none}
@@ -227,12 +227,12 @@ const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 const MF=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SWATCHES=['#5BC5A7','#3D85CC','#F59E0B','#EC4899','#8B5CF6','#F97316','#E05252','#60A5FA','#34D399','#D97706','#A855F7','#F87171'];
 const EMOJIS=['🛒','🍽️','🚗','💊','🎬','🛍️','📦','🏠','⚡','📱','👤','✈️','🍕','☕','💄','🐕','📚','🎮','🏋️','🎵','🏖️','🎁','💻','🔧','👶','🧴','🌿','🍷','🎯'];
-const fmt=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+const fmt=n=>'₹ '+Math.round(n).toLocaleString('en-IN');
 const fmtHero=n=>{
   const num=Number(n)||0;
   const sign=num<0?'<span class="hsign">-</span>':'';
   const [intPart,decPart]=Math.abs(num).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}).split('.');
-  return `${sign}<span class="hcur">₹</span>${intPart}<span class="hdec">.${decPart}</span>`;
+  return `${sign}<span class="hcur">₹ </span>${intPart}<span class="hdec">.${decPart}</span>`;
 };
 const uid=()=>Math.random().toString(36).slice(2,9);
 const today=()=>new Date().toISOString().split('T')[0];
@@ -314,6 +314,8 @@ function migrate(data){
     if(data.sw.lastSync===undefined)data.sw.lastSync=null;
   }
   if(data.loans)data.loans.forEach(l=>{
+    // migrate: if no currentBalance, use principal as starting point
+    if(!l.currentBalance&&l.principal)l.currentBalance=l.principal;
     if(!l.startDate){
       const paid=l.paid||0;const d=new Date();
       d.setMonth(d.getMonth()-paid);
@@ -651,11 +653,11 @@ function rExp(){
   let h=`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <span style="font-size:12px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--on-surface-variant)">Total this month</span>
-      <span style="font-size:18px;font-weight:700;font-family:'Nunito','Inter',sans-serif;letter-spacing:-0.02em">${fmt(grandTotal)}</span>
+      <span style="font-size:18px;font-weight:500;font-family:'Nunito','Inter',sans-serif;letter-spacing:-0.02em">${fmt(grandTotal)}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:11px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em;margin-bottom:3px">Expenses</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(expSum)}</div></div>
-      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:11px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em;margin-bottom:3px">Recurring</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--amber)">${fmt(recSum)}</div></div>
+      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:11px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em;margin-bottom:3px">Expenses</div><div style="font-size:14px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(expSum)}</div></div>
+      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:11px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em;margin-bottom:3px">Recurring</div><div style="font-size:14px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--amber)">${fmt(recSum)}</div></div>
     </div>
   </div>`;
 
@@ -753,66 +755,86 @@ function rInvest(){
   [['P',D.names.P],['S',D.names.S],['joint','Joint']].forEach(([person,label])=>{
     const items=groups[person];if(!items?.length)return;
     h+=`<div class="card"><div class="ctitle">${label}</div>`;
-    items.forEach(inv=>{const p=Math.round(inv.amt/(inv.tgt||1)*100);h+=`<div class="iitem" onclick="openEditInvest('${inv.id}')"><div><div class="iname">${inv.n}</div><div class="isub">Target: ${fmt(inv.tgt)}</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif">${fmt(inv.amt)}</div><div class="ipct ${inv.amt>=inv.tgt?'okc':'loc'}">${p}%</div></div></div>`;});
+    items.forEach(inv=>{const p=Math.round(inv.amt/(inv.tgt||1)*100);h+=`<div class="iitem" onclick="openEditInvest('${inv.id}')"><div><div class="iname">${inv.n}</div><div class="isub">Target: ${fmt(inv.tgt)}</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;font-weight:400">${fmt(inv.amt)}</div><div class="ipct ${inv.amt>=inv.tgt?'okc':'loc'}">${p}%</div></div></div>`;});
     h+='</div>';
   });
   return h;
 }
 
 // ── LOAN AMORTIZATION ─────────────────────────
+// Calculates forward from current outstanding balance (l.currentBalance).
+// If currentBalance not set yet, falls back to original principal for a clean schedule.
 function loanCalc(l){
   const r=l.rate/100/12;
-  const P=l.principal,emi=l.emi;
-  const startYM=l.startDate||'2020-01';
+  const emi=l.emi;
+  // Use current outstanding balance as the starting point
+  const startBal=l.currentBalance>0?l.currentBalance:(l.principal||0);
   const prepayments=(l.prepayments||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
-  let balance=P,month=0,totalInterest=0,totalPrincipalPaid=0;
+
+  // Guard: if EMI can't even cover first month's interest, flag it
+  const firstMonthInt=startBal*r;
+  if(r>0&&emi<=firstMonthInt){
+    // EMI too low — return error state
+    return{outstanding:startBal,remMonths:null,paidMonths:0,curInt:Math.round(firstMonthInt),
+      curPrin:Math.round(emi-firstMonthInt),totalInterest:0,interestPaidSoFar:0,
+      interestRemaining:0,endYM:'—',totalPrep:0,interestSaved:0,monthsSaved:0,
+      schedule:[],error:'EMI ('+fmt(emi)+') is less than first month interest ('+fmt(firstMonthInt)+'). Please increase EMI.'};
+  }
+
+  // Build schedule from current balance forward, month 0 = this month
+  const now=new Date();
+  const curY=now.getFullYear(),curM=now.getMonth();
+  let balance=startBal,month=0,totalInterest=0;
   const schedule=[];
-  const nowYM=ymKey(new Date().getFullYear(),new Date().getMonth());
-  const [sy,sm]=startYM.split('-').map(Number);
   while(balance>1&&month<600){
-    const y2=sy+Math.floor((sm-1+month)/12);
-    const m2=((sm-1+month)%12);
+    const y2=curY+Math.floor((curM+month)/12);
+    const m2=(curM+month)%12;
     const ym=ymKey(y2,m2);
     if(r>0){
       const intPart=balance*r;
       const prinPart=Math.min(emi-intPart,balance);
-      totalInterest+=intPart;totalPrincipalPaid+=prinPart;balance-=prinPart;
+      totalInterest+=intPart;balance-=prinPart;
+      // apply any prepayment this month
       const prep=prepayments.find(p=>p.date.slice(0,7)===ym);
       const prepAmt=prep?Math.min(prep.amt,balance):0;
       balance=Math.max(0,balance-prepAmt);
-      schedule.push({ym,interest:intPart,principal:prinPart,balance,prepayment:prepAmt});
+      schedule.push({ym,interest:Math.round(intPart),principal:Math.round(prinPart),balance:Math.round(balance),prepayment:prepAmt});
     } else {
       const prinPart=Math.min(emi,balance);
-      totalPrincipalPaid+=prinPart;balance=Math.max(0,balance-prinPart);
-      schedule.push({ym,interest:0,principal:prinPart,balance,prepayment:0});
+      totalInterest+=0;balance=Math.max(0,balance-prinPart);
+      schedule.push({ym,interest:0,principal:Math.round(prinPart),balance:Math.round(balance),prepayment:0});
     }
     month++;if(balance<=1){balance=0;break;}
   }
-  const nowIdx=schedule.findIndex(s=>s.ym===nowYM);
-  const currentIdx=nowIdx>=0?nowIdx:Math.min(month-1,schedule.length-1);
-  const current=schedule[currentIdx]||schedule[schedule.length-1]||{balance:0,interest:0,principal:0};
-  const paidMonths=currentIdx+1,remMonths=Math.max(0,schedule.length-paidMonths);
-  const outstanding=current.balance;
-  const curInt=current.interest,curPrin=current.principal;
-  const totalIntOverLife=schedule.reduce((a,s)=>a+s.interest,0);
-  const interestPaidSoFar=schedule.slice(0,paidMonths).reduce((a,s)=>a+s.interest,0);
-  const interestRemaining=totalIntOverLife-interestPaidSoFar;
+
+  const cur=schedule[0]||{balance:startBal,interest:0,principal:0};
+  const remMonths=schedule.length;
+  const outstanding=startBal; // shown as current outstanding
+  const curInt=cur.interest,curPrin=cur.principal;
+  const totalIntOverLife=Math.round(totalInterest);
   const lastSched=schedule[schedule.length-1];
   const endYM=lastSched?lastSched.ym:'—';
   const totalPrep=prepayments.reduce((a,p)=>a+p.amt,0);
-  const origSchedule=loanCalcNoPrepay(l);
+
+  // Interest saved vs if no prepayments from here
+  const origSchedule=loanCalcNoPrepay({...l,principal:startBal});
   const interestSaved=Math.max(0,origSchedule.totalInterest-totalIntOverLife);
   const monthsSaved=Math.max(0,origSchedule.totalMonths-schedule.length);
-  return{outstanding,remMonths,paidMonths,curInt,curPrin,totalInterest:totalIntOverLife,interestPaidSoFar,interestRemaining,endYM,totalPrep,interestSaved,monthsSaved,schedule};
+
+  return{outstanding,remMonths,paidMonths:0,curInt,curPrin,
+    totalInterest:totalIntOverLife,interestPaidSoFar:0,
+    interestRemaining:totalIntOverLife,endYM,totalPrep,
+    interestSaved,monthsSaved,schedule,error:null};
 }
 function loanCalcNoPrepay(l){
-  const r=l.rate/100/12;
-  let balance=l.principal,totalInterest=0,months=0;
+  const r=l.rate/100/12,emi=l.emi;
+  let balance=l.principal||0,totalInterest=0,months=0;
   while(balance>1&&months<600){
-    const intP=balance*r;const prinP=Math.min(l.emi-intP,balance);
+    const intP=balance*r;const prinP=Math.min(emi-intP,balance);
+    if(prinP<=0)break;
     totalInterest+=intP;balance-=prinP;months++;if(balance<=1)break;
   }
-  return{totalInterest,totalMonths:months};
+  return{totalInterest:Math.round(totalInterest),totalMonths:months};
 }
 function fmtYM(ym){
   if(!ym||ym==='—')return'—';
@@ -823,17 +845,15 @@ function rLoans(){
   loans.forEach(l=>{
     const calc=loanCalc(l);
     const owner=l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
-    const pp=calc.schedule.length>0?Math.min(100,Math.round(calc.paidMonths/calc.schedule.length*100)):0;
-    const hasStart=!!l.startDate;
     h+=`<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div>
           <div style="font-size:14px;font-weight:600">${l.n}</div>
-          <div style="font-size:11px;color:var(--on-surface-variant)">${owner} · ${l.rate}% p.a. · Started ${hasStart?fmtYM(l.startDate):'—'}</div>
+          <div style="font-size:11px;color:var(--on-surface-variant)">${owner} · ${l.rate}% p.a.${l.principal?` · Original ₹ `+Math.round(l.principal).toLocaleString('en-IN'):''}</div>
         </div>
         <div style="background:rgba(245,158,11,.1);color:#B45309;font-size:12px;font-weight:600;padding:4px 10px;border-radius:var(--r-full);font-family:'Nunito','Inter',sans-serif">${fmt(l.emi)}/mo</div>
       </div>
-      ${hasStart?`
+      ${calc.error?`<div style="color:var(--error);font-size:12px;padding:10px 12px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:10px">${calc.error}</div>`:''}
       <div class="ms" style="margin-bottom:10px">
         <div class="ms-item"><div class="ms-lbl">Outstanding</div><div class="ms-val rv">${fmt(calc.outstanding)}</div></div>
         <div class="ms-item"><div class="ms-lbl">Remaining</div><div class="ms-val av">${calc.remMonths} mo</div></div>
@@ -843,37 +863,34 @@ function rLoans(){
         <div style="font-size:11px;color:var(--on-surface-variant);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-family:'Space Grotesk','Inter',sans-serif">This month's EMI breakdown</div>
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="font-size:12px;color:var(--on-surface-variant)">Interest portion</span>
-          <span style="font-size:12px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.curInt)}</span>
+          <span style="font-size:12px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.curInt)}</span>
         </div>
         <div style="display:flex;justify-content:space-between">
           <span style="font-size:12px;color:var(--on-surface-variant)">Principal portion</span>
-          <span style="font-size:12px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.curPrin)}</span>
+          <span style="font-size:12px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.curPrin)}</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <div style="flex:1;background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Remaining</div>
-          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.interestRemaining)}</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.interestRemaining)}</div>
         </div>
         <div style="flex:1;background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Paid</div>
-          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(calc.interestPaidSoFar)}</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(calc.interestPaidSoFar)}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         ${calc.totalPrep>0?`<div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Total Prepaid</div>
-          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.totalPrep)}</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.totalPrep)}</div>
         </div>
         <div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Saved</div>
-          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.interestSaved)} · ${calc.monthsSaved} mo</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.interestSaved)} · ${calc.monthsSaved} mo</div>
         </div>`:''}
       </div>
-      <div style="height:5px;background:var(--surface-container);border-radius:var(--r-full);overflow:hidden;margin-bottom:10px">
-        <div style="height:100%;width:${pp}%;background:linear-gradient(90deg,var(--primary),var(--primary-dark));border-radius:var(--r-full);transition:width .6s"></div>
-      </div>
-      <div style="font-size:11px;color:var(--on-surface-variant);text-align:right;margin-bottom:8px">${pp}% paid · ${calc.paidMonths} of ${calc.schedule.length} months</div>
+      <div style="font-size:11px;color:var(--on-surface-variant);text-align:right;margin-bottom:8px">${calc.remMonths!==null?calc.remMonths+' months remaining':'—'}</div>
       ${(l.prepayments||[]).length>0?`<div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--outline-variant)">
         <div class="dlbl" style="margin-top:0">Prepayments</div>
         ${(l.prepayments||[]).sort((a,b)=>a.date.localeCompare(b.date)).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0">
@@ -884,7 +901,7 @@ function rLoans(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
         <button class="sbtn" style="margin:0;font-size:12px;padding:10px" onclick="openAddPrepayment('${l.id}')">+ Prepayment</button>
         <button class="xbtn" style="margin:0;font-size:12px;padding:10px" onclick="openEditLoan('${l.id}')">Edit Loan</button>
-      </div>`:'<div style="text-align:center;padding:12px;color:var(--on-surface-variant);font-size:12px">Set a start month to see amortization</div>'}
+      </div>
     </div>`;
   });
   if(!loans.length)h='<div style="text-align:center;padding:32px;color:var(--on-surface-variant)">No loans. Tap + to add one.</div>';
@@ -904,12 +921,12 @@ function rSettle(){
     <div class="ctitle">This Month's Breakdown</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
       <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:12px;border:1px solid var(--outline-variant)">
-        <div class="ms-lbl">${D.names.P} Paid</div><div style="font-size:15px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(s.pP)}</div>
-        <div class="ms-lbl" style="margin-top:8px">${D.names.P} Fair Share</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(s.pF)}</div>
+        <div class="ms-lbl">${D.names.P} Paid</div><div style="font-size:15px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(s.pP)}</div>
+        <div class="ms-lbl" style="margin-top:8px">${D.names.P} Fair Share</div><div style="font-size:14px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(s.pF)}</div>
       </div>
       <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:12px;border:1px solid var(--outline-variant)">
-        <div class="ms-lbl">${D.names.S} Paid</div><div style="font-size:15px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--secondary)">${fmt(s.sP)}</div>
-        <div class="ms-lbl" style="margin-top:8px">${D.names.S} Fair Share</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(s.sF)}</div>
+        <div class="ms-lbl">${D.names.S} Paid</div><div style="font-size:15px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--secondary)">${fmt(s.sP)}</div>
+        <div class="ms-lbl" style="margin-top:8px">${D.names.S} Fair Share</div><div style="font-size:14px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(s.sF)}</div>
       </div>
     </div>
   </div>`;
@@ -1144,31 +1161,33 @@ function delInvest(id){if(!confirm('Delete?'))return;D.investments=D.investments
 
 // ── LOAN MODALS ───────────────────────────────
 function lForm(l){
-  const today2=today().slice(0,7);
   return`
     <div class="fg"><label class="flbl">Loan Name</label><input class="fi" id="ln" value="${l.n||''}" placeholder="e.g. Home Loan"></div>
     <div class="frow">
-      <div class="fg"><label class="flbl">EMI / Month (₹)</label><input class="fi" id="le" type="number" value="${l.emi||''}" inputmode="numeric"></div>
-      <div class="fg"><label class="flbl">Interest Rate %</label><input class="fi" id="lr" type="number" step="0.1" value="${l.rate||''}" inputmode="decimal"></div>
+      <div class="fg"><label class="flbl">EMI / Month (₹)</label><input class="fi" id="le" type="number" value="${l.emi||''}" inputmode="numeric" placeholder="e.g. 45000"></div>
+      <div class="fg"><label class="flbl">Interest Rate % p.a.</label><input class="fi" id="lr" type="number" step="0.1" value="${l.rate||''}" inputmode="decimal" placeholder="e.g. 8.5"></div>
     </div>
+    <div class="fg"><label class="flbl">Current Outstanding Balance (₹)</label><input class="fi" id="lcb" type="number" value="${l.currentBalance||l.principal||''}" inputmode="numeric" placeholder="Check your latest loan statement"></div>
     <div class="frow">
-      <div class="fg"><label class="flbl">Tenure (months)</label><input class="fi" id="lt" type="number" value="${l.tenure||''}" inputmode="numeric"></div>
-      <div class="fg"><label class="flbl">Start Month</label><input class="fi" id="lstart" type="month" value="${l.startDate||today2}"></div>
-    </div>
-    <div class="frow">
-      <div class="fg"><label class="flbl">Original Principal (₹)</label><input class="fi" id="lpr" type="number" value="${l.principal||''}" inputmode="numeric"></div>
+      <div class="fg"><label class="flbl">Original Principal (₹)</label><input class="fi" id="lpr" type="number" value="${l.principal||''}" inputmode="numeric" placeholder="Original loan amount"></div>
       <div class="fg"><label class="flbl">Owner</label><select class="fi" id="lo"><option value="joint"${l.p==='joint'?' selected':''}>Joint</option><option value="P"${l.p==='P'?' selected':''}>${D.names.P}</option><option value="S"${l.p==='S'?' selected':''}>${D.names.S}</option></select></div>
+    </div>
+    <div style="font-size:11px;color:var(--on-surface-variant);margin-top:2px;line-height:1.6;padding:8px 10px;background:var(--surface-low);border-radius:var(--r-sm);border:1px solid var(--outline-variant)">
+      💡 Enter your <strong>current outstanding balance</strong> from your latest bank statement. All amortization is calculated forward from today using this balance.
     </div>`;
 }
 function openAddLoan(){showM('Add Loan',lForm({})+`<button class="sbtn" onclick="subLoan()">Add</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
 function subLoan(){
   const n=document.getElementById('ln').value.trim(),e=parseInt(document.getElementById('le').value)||0;
   if(!n||!e){toast('Fill all fields');return;}
-  D.loans.push({id:'l'+uid(),n,emi:e,rate:parseFloat(document.getElementById('lr').value)||0,tenure:parseInt(document.getElementById('lt').value)||0,principal:parseInt(document.getElementById('lpr').value)||0,p:document.getElementById('lo').value,startDate:document.getElementById('lstart').value||today().slice(0,7),prepayments:[],paid:0});
+  const principal=parseInt(document.getElementById('lpr').value)||0;
+  const currentBalance=parseInt(document.getElementById('lcb').value)||principal;
+  D.loans.push({id:'l'+uid(),n,emi:e,rate:parseFloat(document.getElementById('lr').value)||0,
+    principal,currentBalance,p:document.getElementById('lo').value,prepayments:[]});
   ss();closeM();render();toast('Added ✓');
 }
 function openEditLoan(id){const l=D.loans.find(x=>x.id===id);if(!l)return;showM('Edit Loan',lForm(l)+`<button class="sbtn" onclick="subEditLoan('${id}')">Save</button><button class="dbtn" onclick="delLoan('${id}')">Delete</button><button class="xbtn" onclick="closeM()">Cancel</button>`);}
-function subEditLoan(id){const l=D.loans.find(x=>x.id===id);if(!l)return;l.n=document.getElementById('ln').value.trim()||l.n;l.emi=parseInt(document.getElementById('le').value)||l.emi;l.rate=parseFloat(document.getElementById('lr').value)||l.rate;l.tenure=parseInt(document.getElementById('lt').value)||l.tenure;l.principal=parseInt(document.getElementById('lpr').value)||l.principal;l.p=document.getElementById('lo').value;l.startDate=document.getElementById('lstart').value||l.startDate;if(!l.prepayments)l.prepayments=[];ss();closeM();render();toast('Saved ✓');}
+function subEditLoan(id){const l=D.loans.find(x=>x.id===id);if(!l)return;l.n=document.getElementById('ln').value.trim()||l.n;l.emi=parseInt(document.getElementById('le').value)||l.emi;l.rate=parseFloat(document.getElementById('lr').value)||l.rate;l.principal=parseInt(document.getElementById('lpr').value)||l.principal;l.currentBalance=parseInt(document.getElementById('lcb').value)||l.currentBalance||l.principal;l.p=document.getElementById('lo').value;if(!l.prepayments)l.prepayments=[];ss();closeM();render();toast('Saved ✓');}
 function delLoan(id){if(!confirm('Delete loan?'))return;D.loans=D.loans.filter(x=>x.id!==id);ss();closeM();render();}
 function openAddPrepayment(loanId){
   const l=D.loans.find(x=>x.id===loanId);if(!l)return;
@@ -1179,7 +1198,8 @@ function openAddPrepayment(loanId){
     <button class="sbtn" onclick="subPrepayment('${loanId}')">Add Prepayment</button>
     <button class="xbtn" onclick="closeM()">Cancel</button>`);
 }
-function subPrepayment(loanId){const l=D.loans.find(x=>x.id===loanId);if(!l)return;const amt=parseInt(document.getElementById('pamt').value)||0;const date=document.getElementById('pdate').value;const note=document.getElementById('pnote').value.trim();if(!amt||!date){toast('Enter amount and date');return;}if(!l.prepayments)l.prepayments=[];l.prepayments.push({id:'pp'+uid(),amt,date,note});ss();closeM();render();toast('Prepayment added ✓');}
+function subPrepayment(loanId){const l=D.loans.find(x=>x.id===loanId);if(!l)return;const amt=parseInt(document.getElementById('pamt').value)||0;const date=document.getElementById('pdate').value;const note=document.getElementById('pnote').value.trim();if(!amt||!date){toast('Enter amount and date');return;}if(!l.prepayments)l.prepayments=[];l.prepayments.push({id:'pp'+uid(),amt,date,note});// Reduce currentBalance by prepayment amount
+if(l.currentBalance)l.currentBalance=Math.max(0,l.currentBalance-amt);ss();closeM();render();toast('Prepayment added ✓');}
 function delPrepayment(loanId,prepId){const l=D.loans.find(x=>x.id===loanId);if(!l)return;if(!confirm('Remove this prepayment?'))return;l.prepayments=(l.prepayments||[]).filter(p=>p.id!==prepId);ss();render();toast('Removed');}
 
 // ── BUDGET EDIT ───────────────────────────────
@@ -1330,6 +1350,7 @@ function exportExcel(){
     const wsR=XLSX.utils.aoa_to_sheet(recRows);wsR['!cols']=[{wch:14},{wch:30},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14}];
     XLSX.utils.book_append_sheet(wb,'Recurring',wsR);
     try{
+      if(!window.XLSX||!XLSX.utils){toast('❌ Excel library not loaded yet, try again in 2s');return;}
       const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
       const blob=new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
       const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='PS_Budget_'+today()+'.xlsx';document.body.appendChild(a);a.click();
