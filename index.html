@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>P&S Budget</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
   /* Splitwise-inspired light palette */
@@ -49,9 +49,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .month-nav{display:flex;align-items:center;gap:6px}
 .mbtn{background:var(--surface-container);border:none;color:var(--on-surface-variant);width:30px;height:30px;border-radius:var(--r-full);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background .15s}
 .mbtn:hover{background:var(--surface-high)}
-.mlabel{font-size:15px;font-weight:600;color:var(--on-surface)}
+.mlabel{font-size:16px;font-weight:700;color:var(--on-surface)}
 .htoggle{display:flex;background:var(--surface-container);border-radius:var(--r-full);padding:3px;gap:2px}
-.hbtn{border:none;background:none;padding:5px 11px;border-radius:var(--r-full);font-size:11px;font-weight:600;cursor:pointer;font-family:'Space Grotesk','Inter',sans-serif;color:var(--on-surface-variant);white-space:nowrap;transition:background .15s,color .15s}
+.hbtn{border:none;background:none;padding:5px 11px;border-radius:var(--r-full);font-size:12px;font-weight:600;cursor:pointer;font-family:'Space Grotesk','Inter',sans-serif;color:var(--on-surface-variant);white-space:nowrap;transition:background .15s,color .15s}
 .hbtn.ah{background:var(--primary);color:var(--on-primary)}
 .hbtn.ap{background:var(--primary);color:var(--on-primary)}
 .hbtn.as2{background:var(--secondary);color:#fff}
@@ -60,10 +60,10 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .hero{margin:12px 16px 8px;background:var(--surface);border-radius:var(--r);padding:16px;flex-shrink:0;box-shadow:var(--shadow-card)}
 .hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px}
 .hero-kpi{min-width:0}
-.hval{display:flex;align-items:flex-start;font-size:1.85rem;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:-0.02em;line-height:1.1;color:var(--on-surface);white-space:nowrap}
-.hcur,.hdec,.hsign{font-size:.85rem;line-height:1.4;color:var(--on-surface-variant);font-family:'DM Mono',monospace;letter-spacing:0}
+.hval{display:flex;align-items:flex-start;font-size:1.85rem;font-weight:700;font-family:'Nunito','Inter',sans-serif;letter-spacing:-0.02em;line-height:1.1;color:var(--on-surface);white-space:nowrap}
+.hcur,.hdec,.hsign{font-size:.85rem;line-height:1.4;color:var(--on-surface-variant);font-family:'Nunito','Inter',sans-serif;font-weight:700}
 .hcur{margin:2px 2px 0 0}.hdec{margin:2px 0 0 2px}.hsign{margin:2px 2px 0 0}
-.hlbl{font-size:10px;color:var(--on-surface-variant);margin-bottom:4px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.08em}
+.hlbl{font-size:11px;color:var(--on-surface-variant);margin-bottom:4px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.06em}
 .sbadge{font-size:12px;font-weight:600;padding:5px 10px;border-radius:var(--r-full);font-family:'Space Grotesk','Inter',sans-serif;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .sbadge.pos{background:rgba(91,197,167,.12);color:var(--primary-dark)}
 .sbadge.neg{background:rgba(224,82,82,.1);color:var(--error)}
@@ -71,19 +71,19 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .bfill{height:100%;border-radius:var(--r-full);background:linear-gradient(90deg,var(--primary),var(--primary-dark));transition:width .5s}
 .ms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .ms-item{background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)}
-.ms-lbl{font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.04em}
-.ms-val{font-size:13px;font-weight:600;font-family:'DM Mono',monospace}
+.ms-lbl{font-size:11px;color:var(--on-surface-variant);margin-bottom:3px;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em}
+.ms-val{font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif}
 .rv{color:var(--error)}.gv{color:var(--primary-dark)}.av{color:var(--amber)}
 /* Tabs */
 .tabs{display:flex;padding:4px 16px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;gap:2px;background:var(--surface);border-bottom:1px solid var(--outline-variant)}
 .tabs::-webkit-scrollbar{display:none}
-.tab{flex-shrink:0;border:none;background:none;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer;border-radius:var(--r-full);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;transition:background .15s,color .15s}
+.tab{flex-shrink:0;border:none;background:none;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 11px;cursor:pointer;border-radius:var(--r-full);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;transition:background .15s,color .15s}
 .tab.active{color:var(--primary-dark);background:rgba(91,197,167,.1)}
 .content{flex:1;overflow-y:auto;padding:12px 16px 100px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .content::-webkit-scrollbar{display:none}
 /* Cards */
 .card{background:var(--surface);border-radius:var(--r);padding:16px;margin-bottom:10px;box-shadow:var(--shadow-card)}
-.ctitle{font-size:10px;font-weight:600;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-family:'Space Grotesk','Inter',sans-serif}
+.ctitle{font-size:12px;font-weight:600;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-family:'Space Grotesk','Inter',sans-serif}
 .ctitle-edit{font-size:11px;color:var(--primary-dark);cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0;font-family:'Inter',sans-serif}
 /* List items */
 .eitem{display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer}
@@ -93,7 +93,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .ename{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .emeta{font-size:11px;color:var(--on-surface-variant);margin-top:2px}
 .eright{text-align:right;flex-shrink:0}
-.eamt{font-size:14px;font-weight:600;font-family:'DM Mono',monospace}
+.eamt{font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif}
 .ewho{font-size:10px;padding:2px 7px;border-radius:var(--r-full);margin-top:3px;display:inline-block}
 .wp{background:rgba(91,197,167,.12);color:var(--primary-dark)}.ws{background:rgba(61,133,204,.12);color:var(--secondary)}.wb{background:rgba(245,158,11,.1);color:#B45309}
 .rec-badge{font-size:9px;padding:2px 6px;border-radius:var(--r-full);background:rgba(245,158,11,.1);color:#B45309;margin-left:4px;vertical-align:middle}
@@ -103,7 +103,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .fab:active{transform:scale(.93)}
 /* Bottom nav */
 .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:var(--surface);border-top:1px solid var(--outline-variant);padding-bottom:env(safe-area-inset-bottom,0)}
-.nbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;font-size:10px;cursor:pointer;padding:10px 0 8px;letter-spacing:.04em}
+.nbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;font-size:11px;cursor:pointer;padding:10px 0 8px;letter-spacing:.03em}
 .nbtn.active{color:var(--primary-dark)}
 .nicon{font-size:19px}
 /* Overlay */
@@ -112,7 +112,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .mhandle{width:36px;height:4px;background:var(--surface-high);border-radius:2px;margin:0 auto 16px}
 .mtitle{font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:-0.01em;color:var(--on-surface)}
 .fg{margin-bottom:14px}
-.flbl{font-size:10px;color:var(--on-surface-variant);margin-bottom:6px;display:block;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.flbl{font-size:11px;color:var(--on-surface-variant);margin-bottom:6px;display:block;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.05em}
 .fi{width:100%;background:var(--surface-low);border:1.5px solid var(--outline-variant);border-radius:var(--r-sm);padding:12px 14px;color:var(--on-surface);font-size:14px;font-family:'Inter',sans-serif;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .15s}
 .fi:focus{border-color:var(--primary);outline:none}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:9px}
@@ -128,7 +128,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .cbar{height:100%;border-radius:var(--r-full);transition:width .6s}
 /* Settle */
 .sc{background:linear-gradient(135deg,rgba(91,197,167,.08),rgba(61,133,204,.06));border-radius:var(--r);padding:20px;text-align:center;margin-bottom:10px;border:1px solid var(--outline-variant)}
-.samt{font-size:30px;font-weight:700;font-family:'Inter',sans-serif;color:var(--primary-dark);margin:6px 0;letter-spacing:-0.02em}
+.samt{font-size:30px;font-weight:700;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark);margin:6px 0;letter-spacing:-0.02em}
 /* Invest */
 .iitem{display:flex;justify-content:space-between;align-items:center;padding:10px 0;cursor:pointer}
 .iname{font-size:13px;font-weight:500}
@@ -142,7 +142,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;background:var(--surface-low);border-radius:var(--r-sm);padding:8px;margin-bottom:11px}
 .eo{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:18px;border-radius:6px;cursor:pointer}
 .eo.sel{background:var(--surface-high)}
-.dlbl{font-size:10px;color:var(--on-surface-variant);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.08em;font-family:'Space Grotesk','Inter',sans-serif}
+.dlbl{font-size:12px;color:var(--on-surface-variant);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.06em;font-family:'Space Grotesk','Inter',sans-serif}
 .dashaddbtn{width:100%;padding:12px;background:var(--surface-low);border:1.5px dashed var(--outline-variant);border-radius:var(--r-sm);color:var(--on-surface-variant);font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;margin-bottom:10px}
 /* Toast */
 .toast{position:fixed;bottom:calc(78px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--on-surface);color:#fff;border-radius:var(--r-sm);padding:9px 16px;font-size:13px;z-index:500;white-space:nowrap;pointer-events:none;box-shadow:var(--shadow-float)}
@@ -164,7 +164,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .ind-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--outline-variant)}
 .ind-row:last-child{border-bottom:none}
 .ind-lbl{font-size:12px;color:var(--on-surface-variant)}
-.ind-val{font-size:13px;font-weight:600;font-family:'DM Mono',monospace}
+.ind-val{font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif}
 /* Chart */
 .chart-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
 .chart-wrap::-webkit-scrollbar{display:none}
@@ -650,12 +650,12 @@ function rExp(){
 
   let h=`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <span style="font-size:11px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Total this month</span>
-      <span style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-0.02em">${fmt(grandTotal)}</span>
+      <span style="font-size:12px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--on-surface-variant)">Total this month</span>
+      <span style="font-size:18px;font-weight:700;font-family:'Nunito','Inter',sans-serif;letter-spacing:-0.02em">${fmt(grandTotal)}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:10px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.04em;margin-bottom:3px">Expenses</div><div style="font-size:14px;font-weight:600;font-family:'DM Mono',monospace;color:var(--error)">${fmt(expSum)}</div></div>
-      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:10px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.04em;margin-bottom:3px">Recurring</div><div style="font-size:14px;font-weight:600;font-family:'DM Mono',monospace;color:var(--amber)">${fmt(recSum)}</div></div>
+      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:11px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em;margin-bottom:3px">Expenses</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(expSum)}</div></div>
+      <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)"><div style="font-size:11px;color:var(--on-surface-variant);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em;margin-bottom:3px">Recurring</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--amber)">${fmt(recSum)}</div></div>
     </div>
   </div>`;
 
@@ -694,7 +694,7 @@ function rExp(){
   Object.keys(grp).sort((a,b)=>b.localeCompare(a)).forEach(date=>{
     const dt=new Date(date+'T12:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
     const dayTotal=grp[date].reduce((a,e)=>a+(view==='H'?e.amt:view==='P'?e.amt*(e.sp/100):e.amt*(e.ss/100)),0);
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 5px"><span class="dlbl" style="margin:0">${dt}</span><span style="font-size:11px;color:var(--on-surface-variant);font-family:'DM Mono',monospace">${fmt(dayTotal)}</span></div><div class="card" style="padding:4px 0">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 5px"><span class="dlbl" style="margin:0">${dt}</span><span style="font-size:11px;color:var(--on-surface-variant);font-family:'Nunito','Inter',sans-serif">${fmt(dayTotal)}</span></div><div class="card" style="padding:4px 0">`;
     grp[date].forEach(e=>{
       const ci=gCat(e.cat),sub=e.subcat?gSub(e.cat,e.subcat):null;
       const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
@@ -753,7 +753,7 @@ function rInvest(){
   [['P',D.names.P],['S',D.names.S],['joint','Joint']].forEach(([person,label])=>{
     const items=groups[person];if(!items?.length)return;
     h+=`<div class="card"><div class="ctitle">${label}</div>`;
-    items.forEach(inv=>{const p=Math.round(inv.amt/(inv.tgt||1)*100);h+=`<div class="iitem" onclick="openEditInvest('${inv.id}')"><div><div class="iname">${inv.n}</div><div class="isub">Target: ${fmt(inv.tgt)}</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace">${fmt(inv.amt)}</div><div class="ipct ${inv.amt>=inv.tgt?'okc':'loc'}">${p}%</div></div></div>`;});
+    items.forEach(inv=>{const p=Math.round(inv.amt/(inv.tgt||1)*100);h+=`<div class="iitem" onclick="openEditInvest('${inv.id}')"><div><div class="iname">${inv.n}</div><div class="isub">Target: ${fmt(inv.tgt)}</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif">${fmt(inv.amt)}</div><div class="ipct ${inv.amt>=inv.tgt?'okc':'loc'}">${p}%</div></div></div>`;});
     h+='</div>';
   });
   return h;
@@ -831,7 +831,7 @@ function rLoans(){
           <div style="font-size:14px;font-weight:600">${l.n}</div>
           <div style="font-size:11px;color:var(--on-surface-variant)">${owner} · ${l.rate}% p.a. · Started ${hasStart?fmtYM(l.startDate):'—'}</div>
         </div>
-        <div style="background:rgba(245,158,11,.1);color:#B45309;font-size:12px;font-weight:600;padding:4px 10px;border-radius:var(--r-full);font-family:'Space Grotesk','Inter',sans-serif">${fmt(l.emi)}/mo</div>
+        <div style="background:rgba(245,158,11,.1);color:#B45309;font-size:12px;font-weight:600;padding:4px 10px;border-radius:var(--r-full);font-family:'Nunito','Inter',sans-serif">${fmt(l.emi)}/mo</div>
       </div>
       ${hasStart?`
       <div class="ms" style="margin-bottom:10px">
@@ -840,34 +840,34 @@ function rLoans(){
         <div class="ms-item"><div class="ms-lbl">Paid off by</div><div class="ms-val" style="font-size:10px">${fmtYM(calc.endYM)}</div></div>
       </div>
       <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:10px;border:1px solid var(--outline-variant)">
-        <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;font-family:'Space Grotesk','Inter',sans-serif">This month's EMI breakdown</div>
+        <div style="font-size:11px;color:var(--on-surface-variant);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-family:'Space Grotesk','Inter',sans-serif">This month's EMI breakdown</div>
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="font-size:12px;color:var(--on-surface-variant)">Interest portion</span>
-          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--error)">${fmt(calc.curInt)}</span>
+          <span style="font-size:12px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.curInt)}</span>
         </div>
         <div style="display:flex;justify-content:space-between">
           <span style="font-size:12px;color:var(--on-surface-variant)">Principal portion</span>
-          <span style="font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:var(--primary-dark)">${fmt(calc.curPrin)}</span>
+          <span style="font-size:12px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.curPrin)}</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <div style="flex:1;background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Remaining</div>
-          <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace;color:var(--error)">${fmt(calc.interestRemaining)}</div>
+          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.interestRemaining)}</div>
         </div>
         <div style="flex:1;background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Paid</div>
-          <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace;color:var(--on-surface-variant)">${fmt(calc.interestPaidSoFar)}</div>
+          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(calc.interestPaidSoFar)}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         ${calc.totalPrep>0?`<div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Total Prepaid</div>
-          <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace;color:var(--primary-dark)">${fmt(calc.totalPrep)}</div>
+          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.totalPrep)}</div>
         </div>
         <div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Saved</div>
-          <div style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace;color:var(--primary-dark)">${fmt(calc.interestSaved)} · ${calc.monthsSaved} mo</div>
+          <div style="font-size:13px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.interestSaved)} · ${calc.monthsSaved} mo</div>
         </div>`:''}
       </div>
       <div style="height:5px;background:var(--surface-container);border-radius:var(--r-full);overflow:hidden;margin-bottom:10px">
@@ -904,12 +904,12 @@ function rSettle(){
     <div class="ctitle">This Month's Breakdown</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
       <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:12px;border:1px solid var(--outline-variant)">
-        <div class="ms-lbl">${D.names.P} Paid</div><div style="font-size:15px;font-weight:600;font-family:'DM Mono',monospace;color:var(--primary-dark)">${fmt(s.pP)}</div>
-        <div class="ms-lbl" style="margin-top:8px">${D.names.P} Fair Share</div><div style="font-size:14px;font-weight:600;font-family:'DM Mono',monospace;color:var(--on-surface-variant)">${fmt(s.pF)}</div>
+        <div class="ms-lbl">${D.names.P} Paid</div><div style="font-size:15px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(s.pP)}</div>
+        <div class="ms-lbl" style="margin-top:8px">${D.names.P} Fair Share</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(s.pF)}</div>
       </div>
       <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:12px;border:1px solid var(--outline-variant)">
-        <div class="ms-lbl">${D.names.S} Paid</div><div style="font-size:15px;font-weight:600;font-family:'DM Mono',monospace;color:var(--secondary)">${fmt(s.sP)}</div>
-        <div class="ms-lbl" style="margin-top:8px">${D.names.S} Fair Share</div><div style="font-size:14px;font-weight:600;font-family:'DM Mono',monospace;color:var(--on-surface-variant)">${fmt(s.sF)}</div>
+        <div class="ms-lbl">${D.names.S} Paid</div><div style="font-size:15px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--secondary)">${fmt(s.sP)}</div>
+        <div class="ms-lbl" style="margin-top:8px">${D.names.S} Fair Share</div><div style="font-size:14px;font-weight:600;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(s.sF)}</div>
       </div>
     </div>
   </div>`;
@@ -938,7 +938,7 @@ function rTrends(){
     h+=`<rect x="${x-16}" y="${y}" width="32" height="${barH}" rx="4" fill="${clr}22"/>`;
     h+=`<rect x="${x-10}" y="${y}" width="20" height="${barH}" rx="3" fill="${clr}"/>`;
     h+=`<text x="${x}" y="148" text-anchor="middle" font-size="10" fill="#6B7280" font-family="Space Grotesk,Inter,sans-serif">${mo.label}</text>`;
-    h+=`<text x="${x}" y="${y-4}" text-anchor="middle" font-size="9" fill="#6B7280" font-family="DM Mono,monospace">${Math.round(mo.total/1000)}k</text>`;
+    h+=`<text x="${x}" y="${y-4}" text-anchor="middle" font-size="9" fill="#6B7280" font-family="Nunito,Inter,sans-serif">${Math.round(mo.total/1000)}k</text>`;
   });
   h+=`</svg></div></div>`;
 
@@ -1288,7 +1288,7 @@ function exportCSV(){
   const catMap={};(D.categories||[]).forEach(c=>{catMap[c.id]={n:c.n,subs:{}};(c.subs||[]).forEach(s=>{catMap[c.id].subs[s.id]=s.n;});});
   const rows=[['Date','Description','Category','Subcategory','Amount','Paid By','P%','S%','Month']];
   (D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
-    const cn=catMap[e.cat]?.n||e.cat,sn=e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';
+    const cn=catMap[e.cat]?.n||e.cat,sn=e.subcat?(catMap[e.cat]?.subs?.[e.subcat]||''):'';
     rows.push([e.date,'"'+e.d.replace(/"/g,'""')+'"',cn,sn,e.amt,e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Both',e.sp,e.ss,e.date.slice(0,7)]);
   });
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download='ps-expenses-'+today()+'.csv';a.click();toast('CSV exported ✓');
@@ -1322,7 +1322,7 @@ function exportExcel(){
     const wsCat=XLSX.utils.aoa_to_sheet(catRows);wsCat['!cols']=[{wch:22},{wch:6},{wch:10},...Array(subCols).fill({wch:22})];
     XLSX.utils.book_append_sheet(wb,'Categories',wsCat);
     const expRows=[['ID','Date','Description','Category','Subcategory','Amount (₹)','Paid By','P Split %','S Split %','Month']];
-    (D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{const cn=catMap[e.cat]?.n||e.cat;const sn=e.subcat&&catMap[e.cat]?.subs[e.subcat]||'';const pb=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'both';expRows.push([e.id,e.date,e.d,cn,sn,e.amt,pb,e.sp,e.ss,e.date.slice(0,7)]);});
+    (D.expenses||[]).sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{const cn=catMap[e.cat]?.n||e.cat;const sn=e.subcat?(catMap[e.cat]?.subs?.[e.subcat]||''):'';const pb=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'both';expRows.push([e.id,e.date,e.d,cn,sn,e.amt,pb,e.sp,e.ss,e.date.slice(0,7)]);});
     const wsE=XLSX.utils.aoa_to_sheet(expRows);wsE['!cols']=[{wch:14},{wch:12},{wch:30},{wch:22},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10}];
     XLSX.utils.book_append_sheet(wb,'Expenses',wsE);
     const recRows=[['ID','Description','Category','Amount (₹)','Paid By','P Split %','S Split %','From Month']];
