@@ -1,0 +1,7 @@
+name = "sw-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Secrets are NOT stored here — set via:
+#   wrangler secret put SW_API_KEY
+# Then paste your Splitwise API key when prompted.
