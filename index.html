@@ -1730,11 +1730,9 @@ function importExcel(inp){
               ci -= 1;
               while(row.length <= ci) row.push('');
 
-              // Get cell type and style index
+              // Get cell type
               const tMatch = cellXml.match(/ t="([^"]+)"/);
-              
               const cellType = tMatch ? tMatch[1] : '';
-              const styleIdx = sMatch ? parseInt(sMatch[1]) : -1;
 
               const vMatch = cellXml.match(/<v>([\s\S]*?)<\/v>/);
               const rawVal = vMatch ? vMatch[1] : '';
