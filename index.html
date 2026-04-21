@@ -285,7 +285,8 @@ let D={
     {id:'r3',d:'Spotify',cat:'subs',amt:179,pb:'both',sp:50,ss:50},
   ],
   settlements:[],
-  sw:{workerUrl:'',groupId:0,userId_S:0,userId_P:0,lastSync:null}
+  swWorkerUrl:'',
+  swGroups:[]
 };
 
 // ── SYNC ─────────────────────────────────────
@@ -306,14 +307,19 @@ function migrate(data){
     }
     if(!r.from)r.from='2020-01';
   });
-  if(!data.sw)data.sw={workerUrl:'',groupId:0,userId_S:0,userId_P:0,lastSync:null};
-  else{
-    if(data.sw.workerUrl===undefined)data.sw.workerUrl='';
-    if(data.sw.groupId===undefined)data.sw.groupId=0;
-    if(data.sw.userId_S===undefined)data.sw.userId_S=0;
-    if(data.sw.userId_P===undefined)data.sw.userId_P=0;
-    if(data.sw.lastSync===undefined)data.sw.lastSync=null;
+  // Migrate old single sw object → new swGroups array
+  if(!data.swGroups){
+    data.swGroups=[];
+    if(data.sw&&data.sw.groupId){
+      data.swGroups=[{
+        id:data.sw.groupId,name:'Group '+data.sw.groupId,
+        userId_S:data.sw.userId_S,userId_P:data.sw.userId_P,
+        lastSync:data.sw.lastSync
+      }];
+    }
+    delete data.sw;
   }
+  if(!data.swWorkerUrl)data.swWorkerUrl=(data.sw&&data.sw.workerUrl)||'';
   if(data.loans)data.loans.forEach(l=>{
     // migrate: if no currentBalance, use principal as starting point
     if(!l.currentBalance&&l.principal)l.currentBalance=l.principal;
@@ -381,7 +387,7 @@ function setSwSyncStatus(s,msg){
   el.style.color=s==='error'?'var(--error)':s==='syncing'?'var(--amber)':'var(--primary-dark)';
   // Show/hide the SW sync button in topbar based on connection status
   const swBtn=document.getElementById('sw-topbar-btn');
-  if(swBtn)swBtn.style.display=(D.sw&&D.sw.groupId)?'inline':'none';
+  if(swBtn)swBtn.style.display=(D.swGroups&&D.swGroups.length)?'inline':'none';
 }
 // Parse first two words of SW description as "CategoryName SubcategoryName"
 // Returns {cat, subcat, needsCat} — needsCat=true means no match found
@@ -409,103 +415,100 @@ function swCatFromDesc(desc){
 }
 
 async function syncSplitwise(){
-  const sw=D.sw;
-  if(!sw||!sw.workerUrl||!sw.groupId)return;
+  if(!D.swWorkerUrl||(D.swGroups||[]).length===0)return;
   setSwSyncStatus('syncing','SW: syncing…');
-  const base=sw.workerUrl.replace(/\/$/,'');
+  const base=D.swWorkerUrl.replace(/\/$/,'');
 
-  // Build map of swId → existing expense index for updates/deletes
+  // Build map of swId → existing expense index
   const swIdMap={};
   (D.expenses||[]).forEach((e,i)=>{if(e.swId)swIdMap[String(e.swId)]=i;});
 
-  let added=0,deleted=0,offset=0;
-  try{
-    // If we have a lastSync, fetch updates; otherwise fetch all
-    while(true){
-      let url=`${base}/splitwise/get_expenses?group_id=${sw.groupId}&limit=500&offset=${offset}`;
-      if(sw.lastSync)url+=`&updated_after=${encodeURIComponent(sw.lastSync)}`;
-      const r=await fetch(url);
-      if(!r.ok){setSwSyncStatus('error',`SW: error ${r.status}`);return;}
-      const{expenses=[]}=await r.json();
-      for(const e of expenses){
-        if(e.payment)continue;
-        const sid=String(e.id);
-        // Deleted in Splitwise → remove from app
-        if(e.deleted_at){
-          if(swIdMap[sid]!=null){
-            D.expenses.splice(swIdMap[sid],1);
-            // rebuild map after splice
-            delete swIdMap[sid];
-            (D.expenses||[]).forEach((ex,i)=>{if(ex.swId)swIdMap[String(ex.swId)]=i;});
-            deleted++;
-          }
-          continue;
-        }
-        const total=parseFloat(e.cost)||0;if(total<=0)continue;
-        const us=e.users||[];
-        const uS=sw.userId_S?us.find(u=>u.user_id===sw.userId_S):null;
-        const uP=sw.userId_P?us.find(u=>u.user_id===sw.userId_P):null;
-        let pb='both';
-        if(uS&&parseFloat(uS.paid_share)>0)pb='S';
-        else if(uP&&parseFloat(uP.paid_share)>0)pb='P';
-        const owP=uP?parseFloat(uP.owed_share)||0:0;
-        const owS=uS?parseFloat(uS.owed_share)||0:0;
-        const tot=owP+owS;
-        const sp=tot>0?Math.round(owP/tot*100):D.splitRatio.P;
-        const desc=e.description||'Splitwise expense';
-        const {cat,subcat,needsCat}=swCatFromDesc(desc);
+  let totalAdded=0,totalDeleted=0;
 
-        if(swIdMap[sid]!=null){
-          // Update existing entry (amount/date may have changed), preserve manual cat if set
-          const existing=D.expenses[swIdMap[sid]];
-          existing.amt=Math.round(total);existing.pb=pb;
-          existing.sp=sp;existing.ss=100-sp;
-          existing.date=(e.date||'').slice(0,10);
-          existing.d=desc;
-          // Only overwrite cat if it was auto-assigned (needsCat flag) or still unset
-          if(!existing._catManual){existing.cat=cat;existing.subcat=subcat||undefined;existing.needsCat=needsCat;}
-        } else {
-          // New entry
-          const exp={
-            id:'sw'+e.id,swId:sid,src:'sw',
-            d:desc,
-            cat,subcat:subcat||undefined,
-            needsCat,
-            amt:Math.round(total),pb,
-            date:(e.date||'').slice(0,10),
-            sp,ss:100-sp,
-            by:pb==='S'?'S':'P'
-          };
-          D.expenses.push(exp);
-          swIdMap[sid]=D.expenses.length-1;
-          added++;
+  for(const grp of D.swGroups){
+    let added=0,deleted=0,offset=0;
+    try{
+      while(true){
+        let url=`${base}/splitwise/get_expenses?group_id=${grp.id}&limit=500&offset=${offset}`;
+        if(grp.lastSync)url+=`&updated_after=${encodeURIComponent(grp.lastSync)}`;
+        const r=await fetch(url);
+        if(!r.ok){setSwSyncStatus('error',`SW: error ${r.status} (group ${grp.id})`);break;}
+        const{expenses=[]}=await r.json();
+        for(const e of expenses){
+          if(e.payment)continue;
+          const sid=String(e.id);
+          if(e.deleted_at){
+            if(swIdMap[sid]!=null){
+              D.expenses.splice(swIdMap[sid],1);
+              delete swIdMap[sid];
+              (D.expenses||[]).forEach((ex,i)=>{if(ex.swId)swIdMap[String(ex.swId)]=i;});
+              deleted++;
+            }
+            continue;
+          }
+          const total=parseFloat(e.cost)||0;if(total<=0)continue;
+          const us=e.users||[];
+          const uS=grp.userId_S?us.find(u=>u.user_id===grp.userId_S):null;
+          const uP=grp.userId_P?us.find(u=>u.user_id===grp.userId_P):null;
+          let pb='both';
+          if(uS&&parseFloat(uS.paid_share)>0)pb='S';
+          else if(uP&&parseFloat(uP.paid_share)>0)pb='P';
+          const owP=uP?parseFloat(uP.owed_share)||0:0;
+          const owS=uS?parseFloat(uS.owed_share)||0:0;
+          const tot=owP+owS;
+          const sp=tot>0?Math.round(owP/tot*100):D.splitRatio.P;
+          const desc=e.description||'Splitwise expense';
+          const {cat,subcat,needsCat}=swCatFromDesc(desc);
+          if(swIdMap[sid]!=null){
+            const ex=D.expenses[swIdMap[sid]];
+            ex.amt=Math.round(total);ex.pb=pb;ex.sp=sp;ex.ss=100-sp;
+            ex.date=(e.date||'').slice(0,10);ex.d=desc;
+            if(!ex._catManual){ex.cat=cat;ex.subcat=subcat||undefined;ex.needsCat=needsCat;}
+          } else {
+            D.expenses.push({id:'sw'+e.id,swId:sid,src:'sw',swGroup:grp.id,
+              d:desc,cat,subcat:subcat||undefined,needsCat,
+              amt:Math.round(total),pb,date:(e.date||'').slice(0,10),
+              sp,ss:100-sp,by:pb==='S'?'S':'P'});
+            swIdMap[sid]=D.expenses.length-1;
+            added++;
+          }
         }
+        if(expenses.length<500)break;
+        offset+=500;
       }
-      if(expenses.length<500)break;
-      offset+=500;
-    }
-    D.sw.lastSync=new Date().toISOString();
-    ss();
-    if(added>0||deleted>0)render();
-    const msg=[];
-    if(added>0)msg.push(`${added} new`);
-    if(deleted>0)msg.push(`${deleted} deleted`);
-    setSwSyncStatus('ok',msg.length?`SW: ${msg.join(', ')}`:'SW: up to date');
-  }catch(err){setSwSyncStatus('error','SW: error');console.error('SW sync:',err);}
+      grp.lastSync=new Date().toISOString();
+      totalAdded+=added;totalDeleted+=deleted;
+    }catch(err){console.error('SW sync group',grp.id,':',err);}
+  }
+  ss();
+  if(totalAdded>0||totalDeleted>0)render();
+  const msg=[];
+  if(totalAdded>0)msg.push(`${totalAdded} new`);
+  if(totalDeleted>0)msg.push(`${totalDeleted} deleted`);
+  setSwSyncStatus('ok',msg.length?`SW: ${msg.join(', ')}`:'SW: up to date');
 }
 async function swSyncNow(){await syncSplitwise();render();}
 function openSwSetup(){
-  const sw=D.sw||{};
-  let body=`<div style="font-size:13px;color:var(--on-surface-variant);margin-bottom:16px;line-height:1.6">Connect your Splitwise group to auto-import shared expenses. You'll need a Cloudflare Worker proxy (see README).</div>`;
-  body+=`<div class="fg"><label class="flbl">Worker URL</label><input class="fi" id="swurl" value="${sw.workerUrl||''}" placeholder="https://sw-proxy.xxx.workers.dev" autocapitalize="none" autocorrect="off" spellcheck="false"></div>`;
-  if(sw.groupId)body+=`<div style="font-size:12px;color:var(--on-surface-variant);margin-bottom:12px;padding:10px 12px;background:var(--surface-low);border-radius:var(--r-sm)">Currently syncing group ID <strong>${sw.groupId}</strong><br>Last sync: ${sw.lastSync?new Date(sw.lastSync).toLocaleString('en-IN'):'Never'}</div>`;
-  body+=`<button class="sbtn" onclick="swConnect()">Connect →</button><button class="xbtn" onclick="closeM()">Cancel</button>`;
-  if(sw.groupId)body+=`<button class="dbtn" style="margin-top:8px" onclick="swReset()">Disconnect Splitwise</button>`;
+  const groups=D.swGroups||[];
+  let body=`<div style="font-size:13px;color:var(--on-surface-variant);margin-bottom:16px;line-height:1.6">Sync expenses from one or more Splitwise groups. All groups use the same Cloudflare Worker proxy.</div>`;
+  body+=`<div class="fg"><label class="flbl">Worker URL</label><input class="fi" id="swurl" value="${D.swWorkerUrl||''}" placeholder="https://sw-proxy.xxx.workers.dev" autocapitalize="none" autocorrect="off" spellcheck="false"></div>`;
+  if(groups.length){
+    body+=`<div class="ctitle" style="margin-bottom:8px">Connected Groups</div>`;
+    groups.forEach((g,i)=>{
+      body+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(91,197,167,.06);border-radius:var(--r-sm);margin-bottom:8px;border:1px solid rgba(91,197,167,.2)">
+        <div><div style="font-size:13px;font-weight:500">🔗 ${g.name||'Group '+g.id}</div>
+        <div style="font-size:11px;color:var(--on-surface-variant)">Last sync: ${g.lastSync?new Date(g.lastSync).toLocaleString('en-IN'):'Never'}</div></div>
+        <button onclick="swRemoveGroup(${i})" style="border:none;background:none;color:var(--error);font-size:12px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>`;
+    });
+  }
+  body+=`<button class="sbtn" onclick="swConnect()">+ Add Group →</button><button class="xbtn" onclick="closeM()">Cancel</button>`;
   showM('Splitwise Setup',body);
 }
 async function swConnect(){
   const url=(document.getElementById('swurl')?.value||'').trim().replace(/\/$/,'');
   if(!url){toast('Enter worker URL');return;}
+  D.swWorkerUrl=url;
   document.getElementById('mbody').innerHTML='<div style="text-align:center;padding:24px;color:var(--on-surface-variant)">Connecting to Splitwise…</div>';
   try{
     const[userRes,groupsRes]=await Promise.all([
@@ -514,38 +517,51 @@ async function swConnect(){
     ]);
     if(!userRes.ok||!groupsRes.ok){
       const status=!userRes.ok?userRes.status:groupsRes.status;
-      document.getElementById('mbody').innerHTML=`<div style="color:var(--error);padding:12px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:12px">Connection failed (${status}). Check the worker URL and ensure the API key is set via <code style="font-size:11px;background:var(--surface-high);padding:2px 5px;border-radius:4px">wrangler secret put SW_API_KEY</code>.</div><button class="xbtn" onclick="openSwSetup()">← Back</button>`;
+      document.getElementById('mbody').innerHTML=`<div style="color:var(--error);padding:12px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:12px">Connection failed (${status}). Check the worker URL.</div><button class="xbtn" onclick="openSwSetup()">← Back</button>`;
       return;
     }
     const{user}=await userRes.json();
     const{groups=[]}=await groupsRes.json();
-    _swState={groups:groups.filter(g=>g.id!==0),userId:user.id,workerUrl:url,pendingGroupId:0};
-    const opts=_swState.groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
-    document.getElementById('mtitle').textContent='Splitwise Setup';
-    document.getElementById('mbody').innerHTML=`<div style="font-size:12px;color:var(--on-surface-variant);margin-bottom:12px;padding:10px 12px;background:rgba(91,197,167,.08);border-radius:var(--r-sm)">Connected as <strong>${user.first_name||''} ${user.last_name||''}</strong></div><div class="fg"><label class="flbl">Select household group</label><select class="fi" id="swgpick">${opts||'<option>No groups found</option>'}</select></div><button class="sbtn" onclick="swPickGroup()">Select Group →</button><button class="xbtn" onclick="openSwSetup()">← Back</button>`;
+    // Filter out already-connected groups
+    const connectedIds=new Set((D.swGroups||[]).map(g=>g.id));
+    const available=groups.filter(g=>g.id!==0&&!connectedIds.has(g.id));
+    _swState={groups:available,allGroups:groups.filter(g=>g.id!==0),userId:user.id,workerUrl:url,pendingGroupId:0};
+    if(!available.length){
+      document.getElementById('mbody').innerHTML=`<div style="padding:12px;background:rgba(91,197,167,.08);border-radius:var(--r-sm);margin-bottom:12px;font-size:13px">All your Splitwise groups are already connected!</div><button class="xbtn" onclick="openSwSetup()">← Back</button>`;
+      return;
+    }
+    const opts=available.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    document.getElementById('mtitle').textContent='Add Splitwise Group';
+    document.getElementById('mbody').innerHTML=`<div style="font-size:12px;color:var(--on-surface-variant);margin-bottom:12px;padding:10px 12px;background:rgba(91,197,167,.08);border-radius:var(--r-sm)">Signed in as <strong>${user.first_name||''} ${user.last_name||''}</strong></div><div class="fg"><label class="flbl">Select group to add</label><select class="fi" id="swgpick">${opts}</select></div><button class="sbtn" onclick="swPickGroup()">Select Group →</button><button class="xbtn" onclick="openSwSetup()">← Back</button>`;
   }catch(err){document.getElementById('mbody').innerHTML=`<div style="color:var(--error);padding:12px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:12px">Error: ${err.message}</div><button class="xbtn" onclick="openSwSetup()">← Back</button>`;}
 }
 function swPickGroup(){
   const groupId=parseInt(document.getElementById('swgpick')?.value||'0');
-  const group=_swState.groups.find(g=>g.id===groupId);
+  const group=_swState.allGroups.find(g=>g.id===groupId);
   if(!group){toast('Select a group');return;}
   _swState.pendingGroupId=groupId;
+  _swState.pendingGroupName=group.name||('Group '+groupId);
   const others=(group.members||[]).filter(m=>m.id!==_swState.userId);
   if(others.length===0){swSave(0);return;}
   if(others.length===1){swSave(others[0].id);return;}
   const btns=others.map(m=>`<button class="xbtn" style="margin-bottom:8px;width:100%;text-align:left" onclick="swSave(${m.id})">${m.first_name||''} ${m.last_name||''}</button>`).join('');
   document.getElementById('mtitle').textContent=`Who is ${D.names.P}?`;
-  document.getElementById('mbody').innerHTML=`<div style="font-size:13px;margin-bottom:14px">Who is <strong>${D.names.P}</strong> in this group?</div>${btns}<button class="xbtn" onclick="openSwSetup()">← Back</button>`;
+  document.getElementById('mbody').innerHTML=`<div style="font-size:13px;margin-bottom:14px">Who is <strong>${D.names.P}</strong> in <em>${_swState.pendingGroupName}</em>?</div>${btns}<button class="xbtn" onclick="openSwSetup()">← Back</button>`;
 }
 async function swSave(userId_P){
-  D.sw={workerUrl:_swState.workerUrl,groupId:_swState.pendingGroupId,userId_S:_swState.userId,userId_P,lastSync:null};
-  ss();closeM();render();toast('Splitwise connected ✓');
+  if(!D.swGroups)D.swGroups=[];
+  D.swGroups.push({id:_swState.pendingGroupId,name:_swState.pendingGroupName,
+    userId_S:_swState.userId,userId_P,lastSync:null});
+  ss();closeM();render();toast(`Group "${_swState.pendingGroupName}" connected ✓`);
   await syncSplitwise();
 }
-function swReset(){
-  if(!confirm('Disconnect Splitwise? Imported expenses will stay in the app.'))return;
-  D.sw={workerUrl:'',groupId:0,userId_S:0,userId_P:0,lastSync:null};
-  ss();closeM();render();setSwSyncStatus('ok','');toast('Splitwise disconnected');
+function swRemoveGroup(idx){
+  const grp=D.swGroups[idx];
+  if(!grp)return;
+  if(!confirm(`Disconnect "${grp.name||'Group '+grp.id}"? Imported expenses stay in the app.`))return;
+  D.swGroups.splice(idx,1);
+  ss();render();setSwSyncStatus('ok',D.swGroups.length?null:'');
+  toast('Group disconnected');openSwSetup();
 }
 
 // ── COMPUTED ──────────────────────────────────
@@ -1154,11 +1170,12 @@ function rSettings(){
   <div class="card"><div class="ctitle">Cloud Sync<span class="ctitle-edit" onclick="openSyncSetup()">Change</span></div>
   <div class="eitem"><div class="einfo"><div style="font-size:11px;color:var(--on-surface-variant);word-break:break-all" id="fb-url-display">${FB_URL}</div></div></div></div>
   <div class="card"><div class="ctitle">Splitwise
-    <span class="ctitle-edit" onclick="openSwSetup()">${D.sw&&D.sw.groupId?'Change':'Set up'}</span>
+    <span class="ctitle-edit" onclick="openSwSetup()">+ Add Group</span>
   </div>
-  ${D.sw&&D.sw.groupId
-    ?`<div class="eitem"><div class="eicon" style="background:rgba(91,197,167,.1)">🔗</div><div class="einfo"><div class="ename">Connected · Group ${D.sw.groupId}</div><div class="emeta">Last sync: ${D.sw.lastSync?new Date(D.sw.lastSync).toLocaleString('en-IN'):'Never'}</div></div></div><button class="sbtn" style="font-size:13px" onclick="swSyncNow()">Sync Now</button>`
-    :`<div class="eitem"><div class="einfo"><div class="ename" style="color:var(--on-surface-variant)">Not connected</div><div class="emeta">Auto-import expenses from your Splitwise group on every app load</div></div></div><button class="sbtn" style="font-size:13px" onclick="openSwSetup()">Connect Splitwise</button>`
+  ${(D.swGroups&&D.swGroups.length)
+    ?`${D.swGroups.map((g,i)=>`<div class="eitem"><div class="eicon" style="background:rgba(91,197,167,.1)">🔗</div><div class="einfo"><div class="ename">${g.name||'Group '+g.id}</div><div class="emeta">Last sync: ${g.lastSync?new Date(g.lastSync).toLocaleString('en-IN'):'Never'}</div></div><button onclick="swRemoveGroup(${i})" style="border:none;background:none;color:var(--error);font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div>`).join('')}
+    <button class="sbtn" style="font-size:13px;margin-top:4px" onclick="swSyncNow()">Sync All Groups</button>`
+    :`<div class="eitem"><div class="einfo"><div class="ename" style="color:var(--on-surface-variant)">Not connected</div><div class="emeta">Auto-import from one or more Splitwise groups on every app load</div></div></div><button class="sbtn" style="font-size:13px" onclick="openSwSetup()">Connect Splitwise</button>`
   }</div>
   <div class="card"><div class="ctitle">Backup & Export</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="sbtn" style="margin-top:0;font-size:13px" onclick="exportJSON()">⬇ Export JSON</button><button class="xbtn" style="margin-top:0;font-size:13px" onclick="document.getElementById('imp').click()">⬆ Import JSON</button></div>
