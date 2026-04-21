@@ -1778,7 +1778,7 @@ function importExcel(inp){
           if(!rel) return;
           const tgtM = rel.match(/Target="([^"]+)"/);
           if(!tgtM) return;
-          const path = tgtM[1].replace(/^\//, '');  // Target may be /xl/... or xl/...
+          const path = (()=>{ let t=tgtM[1].replace(/^\//,''); return t.startsWith('xl/')?t:'xl/'+t; })();
           const xml = getXml(path);
           if(xml) sheetMap[name] = parseSheet(xml);
         });
