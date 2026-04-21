@@ -362,6 +362,7 @@ async function pullLatest(){
     if(r.ok){
       const cloud=await r.json();
       if(cloud&&cloud.expenses){
+        if(!confirm('Refresh data from cloud?'))return;
         const{_t,...data}=cloud;D=migrate(data);
         try{localStorage.setItem('psb2',JSON.stringify(D));}catch(e){}
         render();toast('Refreshed ✓');
@@ -369,6 +370,7 @@ async function pullLatest(){
     }
     setSyncStatus('ok','Synced');
   }catch(e){setSyncStatus('error','Refresh failed');toast('Could not reach cloud');}
+  // Also sync Splitwise after refreshing
   await syncSplitwise();
 }
 
@@ -383,44 +385,30 @@ function setSwSyncStatus(s,msg){
   const swBtn=document.getElementById('sw-topbar-btn');
   if(swBtn)swBtn.style.display=(D.sw&&D.sw.groupId)?'inline':'none';
 }
-// Parse first two words of SW description as "CategoryName SubcategoryName"
-// Returns {cat, subcat, needsCat} — needsCat=true means no match found
-function swCatFromDesc(desc){
-  const words=(desc||'').trim().split(/\s+/);
-  const w1=(words[0]||'').toLowerCase();
-  const w2=(words[1]||'').toLowerCase();
-  // Try to match first word to a category name or id
-  const cats=D.categories||[];
-  let matchedCat=null,matchedSub=null;
-  for(const c of cats){
-    if(c.n.toLowerCase().startsWith(w1)||c.id.toLowerCase()===w1){
-      matchedCat=c;
-      // Try second word as subcategory
-      if(w2){
-        for(const s of (c.subs||[])){
-          if(s.n.toLowerCase().startsWith(w2)){matchedSub=s;break;}
-        }
-      }
-      break;
-    }
-  }
-  if(matchedCat) return{cat:matchedCat.id,subcat:matchedSub?matchedSub.id:'',needsCat:false};
-  return{cat:'',subcat:'',needsCat:true};
+const _swCats={
+  'food':'food','food and drink':'food','food & drink':'food','restaurant':'food','dining':'food','coffee':'food','drinks':'food',
+  'groceries':'groceries','grocery':'groceries',
+  'transportation':'transport','transport':'transport','auto & transport':'transport','travel':'transport','fuel':'transport','cab':'transport',
+  'health':'health','health & wellness':'health','health and wellness':'health','medical':'health','pharmacy':'health','fitness':'health','gym':'health',
+  'entertainment':'entertainment','arts & entertainment':'entertainment','movies':'entertainment','games':'entertainment',
+  'shopping':'shopping','clothing':'shopping','electronics':'shopping','clothes':'shopping',
+  'subscriptions':'subs','subscription':'subs',
+  'utilities':'misc','home':'misc','general':'misc','uncategorized':'misc','other':'misc'
+};
+function swCat(name){
+  const k=(name||'').toLowerCase().trim();
+  if(_swCats[k])return _swCats[k];
+  for(const[kw,id]of Object.entries(_swCats)){if(k.includes(kw))return id;}
+  return'misc';
 }
-
 async function syncSplitwise(){
   const sw=D.sw;
   if(!sw||!sw.workerUrl||!sw.groupId)return;
   setSwSyncStatus('syncing','SW: syncing…');
   const base=sw.workerUrl.replace(/\/$/,'');
-
-  // Build map of swId → existing expense index for updates/deletes
-  const swIdMap={};
-  (D.expenses||[]).forEach((e,i)=>{if(e.swId)swIdMap[String(e.swId)]=i;});
-
-  let added=0,deleted=0,offset=0;
+  const existing=new Set((D.expenses||[]).filter(e=>e.swId).map(e=>String(e.swId)));
+  let added=0,offset=0;
   try{
-    // If we have a lastSync, fetch updates; otherwise fetch all
     while(true){
       let url=`${base}/splitwise/get_expenses?group_id=${sw.groupId}&limit=500&offset=${offset}`;
       if(sw.lastSync)url+=`&updated_after=${encodeURIComponent(sw.lastSync)}`;
@@ -428,19 +416,8 @@ async function syncSplitwise(){
       if(!r.ok){setSwSyncStatus('error',`SW: error ${r.status}`);return;}
       const{expenses=[]}=await r.json();
       for(const e of expenses){
-        if(e.payment)continue;
-        const sid=String(e.id);
-        // Deleted in Splitwise → remove from app
-        if(e.deleted_at){
-          if(swIdMap[sid]!=null){
-            D.expenses.splice(swIdMap[sid],1);
-            // rebuild map after splice
-            delete swIdMap[sid];
-            (D.expenses||[]).forEach((ex,i)=>{if(ex.swId)swIdMap[String(ex.swId)]=i;});
-            deleted++;
-          }
-          continue;
-        }
+        if(e.payment||e.deleted_at)continue;
+        if(existing.has(String(e.id)))continue;
         const total=parseFloat(e.cost)||0;if(total<=0)continue;
         const us=e.users||[];
         const uS=sw.userId_S?us.find(u=>u.user_id===sw.userId_S):null;
@@ -452,45 +429,25 @@ async function syncSplitwise(){
         const owS=uS?parseFloat(uS.owed_share)||0:0;
         const tot=owP+owS;
         const sp=tot>0?Math.round(owP/tot*100):D.splitRatio.P;
-        const desc=e.description||'Splitwise expense';
-        const {cat,subcat,needsCat}=swCatFromDesc(desc);
-
-        if(swIdMap[sid]!=null){
-          // Update existing entry (amount/date may have changed), preserve manual cat if set
-          const existing=D.expenses[swIdMap[sid]];
-          existing.amt=Math.round(total);existing.pb=pb;
-          existing.sp=sp;existing.ss=100-sp;
-          existing.date=(e.date||'').slice(0,10);
-          existing.d=desc;
-          // Only overwrite cat if it was auto-assigned (needsCat flag) or still unset
-          if(!existing._catManual){existing.cat=cat;existing.subcat=subcat||undefined;existing.needsCat=needsCat;}
-        } else {
-          // New entry
-          const exp={
-            id:'sw'+e.id,swId:sid,src:'sw',
-            d:desc,
-            cat,subcat:subcat||undefined,
-            needsCat,
-            amt:Math.round(total),pb,
-            date:(e.date||'').slice(0,10),
-            sp,ss:100-sp,
-            by:pb==='S'?'S':'P'
-          };
-          D.expenses.push(exp);
-          swIdMap[sid]=D.expenses.length-1;
-          added++;
-        }
+        D.expenses.push({
+          id:'sw'+e.id,swId:String(e.id),src:'sw',
+          d:e.description||'Splitwise expense',
+          cat:swCat(e.category?.name),
+          amt:Math.round(total),pb,
+          date:(e.date||'').slice(0,10),
+          sp,ss:100-sp,
+          by:pb==='S'?'S':'P'
+        });
+        existing.add(String(e.id));
+        added++;
       }
       if(expenses.length<500)break;
       offset+=500;
     }
     D.sw.lastSync=new Date().toISOString();
     ss();
-    if(added>0||deleted>0)render();
-    const msg=[];
-    if(added>0)msg.push(`${added} new`);
-    if(deleted>0)msg.push(`${deleted} deleted`);
-    setSwSyncStatus('ok',msg.length?`SW: ${msg.join(', ')}`:'SW: up to date');
+    if(added>0)render();
+    setSwSyncStatus('ok',added>0?`SW: ${added} new`:'SW: up to date');
   }catch(err){setSwSyncStatus('error','SW: error');console.error('SW sync:',err);}
 }
 async function swSyncNow(){await syncSplitwise();render();}
@@ -752,10 +709,7 @@ function rExp(){
       const meta=sub?`${ci.n} › ${sub.n}`:ci.n;
       const myAmt=view==='H'?e.amt:view==='P'?e.amt*(e.sp/100):e.amt*(e.ss/100);
       const swTag=e.src==='sw'?`<span class="sw-badge">SW</span>`:'';
-      const needsFlag=e.needsCat&&!e.cat;
-      const rowStyle=needsFlag?'background:rgba(224,82,82,.07);border-radius:var(--r-sm);margin:2px -4px;padding:0 4px;':'';
-      const catWarn=needsFlag?`<span style="font-size:9px;padding:2px 6px;border-radius:var(--r-full);background:rgba(224,82,82,.15);color:var(--error);margin-left:4px;vertical-align:middle">⚠ fix category</span>`:'';
-      h+=`<div class="eitem" style="${rowStyle}" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${needsFlag?'rgba(224,82,82,.15)':ci.c+'18'}">${needsFlag?'❓':ci.i}</div><div class="einfo"><div class="ename">${e.d}${swTag}${catWarn}</div><div class="emeta">${needsFlag?'<span style=\'color:var(--error)\'>Uncategorised — tap to fix</span>':meta+' · '+D.names.P+' '+e.sp+'% / '+D.names.S+' '+e.ss+'%'}</div></div><div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
+      h+=`<div class="eitem" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${ci.c}18">${ci.i}</div><div class="einfo"><div class="ename">${e.d}${swTag}</div><div class="emeta">${meta} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div><div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
     });
     h+='</div>';
   });
@@ -814,83 +768,69 @@ function rInvest(){
 }
 
 // ── LOAN AMORTIZATION ─────────────────────────
-// Standard bank reducing-balance method.
-// Starting point: l.currentBalance (enter from your latest statement).
-// Each month: interest = balance × rate/12, principal = EMI - interest.
-// Prepayments reduce balance immediately in the month they occur.
+// Calculates forward from current outstanding balance (l.currentBalance).
+// If currentBalance not set yet, falls back to original principal for a clean schedule.
 function loanCalc(l){
   const r=l.rate/100/12;
   const emi=l.emi;
+  // Use current outstanding balance as the starting point
   const startBal=l.currentBalance>0?l.currentBalance:(l.principal||0);
-  if(!startBal||!emi)return{outstanding:0,remMonths:0,curInt:0,curPrin:0,
-    totalInterest:0,interestRemaining:0,totalInterestOutstanding:0,
-    principalOutstanding:startBal,endYM:'—',totalPrep:0,
-    interestSaved:0,monthsSaved:0,schedule:[],error:null};
+  const prepayments=(l.prepayments||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
 
+  // Guard: if EMI can't even cover first month's interest, flag it
   const firstMonthInt=startBal*r;
   if(r>0&&emi<=firstMonthInt){
-    return{outstanding:startBal,remMonths:null,curInt:Math.round(firstMonthInt),
-      curPrin:0,totalInterest:0,interestRemaining:0,
-      totalInterestOutstanding:0,principalOutstanding:startBal,
-      endYM:'—',totalPrep:0,interestSaved:0,monthsSaved:0,schedule:[],
-      error:'EMI '+fmt(emi)+' is less than this month's interest '+fmt(firstMonthInt)+'. Increase EMI.'};
+    // EMI too low — return error state
+    return{outstanding:startBal,remMonths:null,paidMonths:0,curInt:Math.round(firstMonthInt),
+      curPrin:Math.round(emi-firstMonthInt),totalInterest:0,interestPaidSoFar:0,
+      interestRemaining:0,endYM:'—',totalPrep:0,interestSaved:0,monthsSaved:0,
+      schedule:[],error:'EMI ('+fmt(emi)+') is less than first month interest ('+fmt(firstMonthInt)+'). Please increase EMI.'};
   }
 
+  // Build schedule from current balance forward, month 0 = this month
   const now=new Date();
   const curY=now.getFullYear(),curM=now.getMonth();
-  const prepayments=(l.prepayments||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
   let balance=startBal,month=0,totalInterest=0;
   const schedule=[];
-
   while(balance>1&&month<600){
     const y2=curY+Math.floor((curM+month)/12);
     const m2=(curM+month)%12;
     const ym=ymKey(y2,m2);
-    const intPart=r>0?balance*r:0;
-    const prinPart=Math.min(emi-intPart,balance);
-    totalInterest+=intPart;
-    balance=Math.max(0,balance-prinPart);
-    // apply prepayments in this month
-    const monthPreps=prepayments.filter(p=>p.date.slice(0,7)===ym);
-    const prepAmt=monthPreps.reduce((a,p)=>a+Math.min(p.amt,balance),0);
-    balance=Math.max(0,balance-prepAmt);
-    schedule.push({
-      ym,
-      interest:Math.round(intPart),
-      principal:Math.round(prinPart),
-      prepayment:Math.round(prepAmt),
-      balance:Math.round(balance)
-    });
-    month++;
-    if(balance<=1){balance=0;break;}
+    if(r>0){
+      const intPart=balance*r;
+      const prinPart=Math.min(emi-intPart,balance);
+      totalInterest+=intPart;balance-=prinPart;
+      // apply any prepayment this month
+      const prep=prepayments.find(p=>p.date.slice(0,7)===ym);
+      const prepAmt=prep?Math.min(prep.amt,balance):0;
+      balance=Math.max(0,balance-prepAmt);
+      schedule.push({ym,interest:Math.round(intPart),principal:Math.round(prinPart),balance:Math.round(balance),prepayment:prepAmt});
+    } else {
+      const prinPart=Math.min(emi,balance);
+      totalInterest+=0;balance=Math.max(0,balance-prinPart);
+      schedule.push({ym,interest:0,principal:Math.round(prinPart),balance:Math.round(balance),prepayment:0});
+    }
+    month++;if(balance<=1){balance=0;break;}
   }
 
-  const cur=schedule[0]||{interest:0,principal:0,balance:startBal};
+  const cur=schedule[0]||{balance:startBal,interest:0,principal:0};
   const remMonths=schedule.length;
+  const outstanding=startBal; // shown as current outstanding
+  const curInt=cur.interest,curPrin=cur.principal;
+  const totalIntOverLife=Math.round(totalInterest);
   const lastSched=schedule[schedule.length-1];
   const endYM=lastSched?lastSched.ym:'—';
-  const totalIntOverLife=Math.round(totalInterest);
-  const totalPrep=(l.prepayments||[]).reduce((a,p)=>a+p.amt,0);
+  const totalPrep=prepayments.reduce((a,p)=>a+p.amt,0);
 
-  // Interest outstanding = sum of all future interest payments
-  const interestRemaining=totalIntOverLife;
-  // Principal outstanding = current balance (what's left to pay of original loan)
-  const principalOutstanding=Math.round(startBal);
+  // Interest saved vs if no prepayments from here
+  const origSchedule=loanCalcNoPrepay({...l,principal:startBal});
+  const interestSaved=Math.max(0,origSchedule.totalInterest-totalIntOverLife);
+  const monthsSaved=Math.max(0,origSchedule.totalMonths-schedule.length);
 
-  // Without prepayments baseline
-  const orig=loanCalcNoPrepay({...l,principal:startBal});
-  const interestSaved=Math.max(0,orig.totalInterest-totalIntOverLife);
-  const monthsSaved=Math.max(0,orig.totalMonths-remMonths);
-
-  return{
-    outstanding:startBal,               // total current outstanding (principal)
-    principalOutstanding,               // same — principal you still owe
-    interestRemaining,                   // total interest you'll pay from here
-    remMonths,curInt:cur.interest,curPrin:cur.principal,
-    totalInterest:totalIntOverLife,
-    endYM,totalPrep,interestSaved,monthsSaved,
-    schedule,error:null
-  };
+  return{outstanding,remMonths,paidMonths:0,curInt,curPrin,
+    totalInterest:totalIntOverLife,interestPaidSoFar:0,
+    interestRemaining:totalIntOverLife,endYM,totalPrep,
+    interestSaved,monthsSaved,schedule,error:null};
 }
 function loanCalcNoPrepay(l){
   const r=l.rate/100/12,emi=l.emi;
@@ -902,45 +842,6 @@ function loanCalcNoPrepay(l){
   }
   return{totalInterest:Math.round(totalInterest),totalMonths:months};
 }
-// SVG payoff chart — balance over time with prepayment markers
-function loanChart(calc,loanId){
-  const sched=calc.schedule;if(!sched.length)return'';
-  const W=320,H=120,PAD=8;
-  const maxBal=sched[0]?sched[0].balance+calc.curPrin+calc.curInt:calc.outstanding;
-  const pts=sched.map((s,i)=>{
-    const x=PAD+Math.round(i/(sched.length-1||1)*(W-PAD*2));
-    const y=PAD+Math.round((1-s.balance/maxBal)*(H-PAD*2));
-    return[x,y,s];
-  });
-  // Smooth polyline
-  const pathD=pts.map(([x,y],i)=>i===0?`M${x},${y}`:`L${x},${y}`).join(' ');
-  const areaD=pathD+` L${pts[pts.length-1][0]},${H-PAD} L${PAD},${H-PAD} Z`;
-  // Prepayment markers (vertical ticks)
-  const prepMarkers=pts.filter(([,,s])=>s.prepayment>0).map(([x,y,s])=>
-    `<line x1="${x}" y1="${y}" x2="${x}" y2="${H-PAD}" stroke="var(--primary-dark)" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.7"/>`
-  ).join('');
-  // Axis labels
-  const nLabels=Math.min(4,sched.length);
-  const labelStep=Math.floor((sched.length-1)/(nLabels-1||1));
-  const labels=pts.filter((_,i)=>i%labelStep===0||i===sched.length-1).slice(0,nLabels).map(([x,,s])=>
-    `<text x="${x}" y="${H}" text-anchor="middle" font-size="8" fill="var(--on-surface-variant)" font-family="Inter,sans-serif">${fmtYM(s.ym)}</text>`
-  ).join('');
-  return`<div style="margin-bottom:10px">
-  <div style="font-size:11px;color:var(--on-surface-variant);margin-bottom:6px;font-family:'Space Grotesk','Inter',sans-serif;text-transform:uppercase;letter-spacing:.06em">Payoff trajectory${calc.totalPrep>0?' · dashed = prepayment':''}</div>
-  <svg width="100%" viewBox="0 0 ${W} ${H+10}" style="display:block;overflow:visible">
-    <defs>
-      <linearGradient id="lg${loanId}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <path d="${areaD}" fill="url(#lg${loanId})"/>
-    <path d="${pathD}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${prepMarkers}
-    ${labels}
-  </svg>
-  </div>`;
-}
 function fmtYM(ym){
   if(!ym||ym==='—')return'—';
   const[y,m]=ym.split('-');return MN[parseInt(m)-1]+' '+y;
@@ -950,74 +851,60 @@ function rLoans(){
   loans.forEach(l=>{
     const calc=loanCalc(l);
     const owner=l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
-    const lid=l.id.replace(/[^a-z0-9]/gi,'');
-    const totalOwed=(calc.principalOutstanding||0)+(calc.interestRemaining||0);
-    const prinPct=totalOwed>0?Math.round(calc.principalOutstanding/totalOwed*100):50;
-    const intPct=100-prinPct;
-    const emiIntPct=l.emi>0?Math.round(calc.curInt/l.emi*100):0;
-    const emiPrinPct=100-emiIntPct;
     h+=`<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div>
           <div style="font-size:14px;font-weight:600">${l.n}</div>
           <div style="font-size:11px;color:var(--on-surface-variant)">${owner} · ${l.rate}% p.a.${l.principal?` · Original ₹ `+Math.round(l.principal).toLocaleString('en-IN'):''}</div>
         </div>
-        <div style="background:rgba(245,158,11,.1);color:#B45309;font-size:12px;padding:4px 10px;border-radius:var(--r-full);font-family:'Nunito','Inter',sans-serif">${fmt(l.emi)}/mo</div>
+        <div style="background:rgba(245,158,11,.1);color:#B45309;font-size:12px;font-weight:600;padding:4px 10px;border-radius:var(--r-full);font-family:'Nunito','Inter',sans-serif">${fmt(l.emi)}/mo</div>
       </div>
       ${calc.error?`<div style="color:var(--error);font-size:12px;padding:10px 12px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:10px">${calc.error}</div>`:''}
-      <div class="ms" style="margin-bottom:12px">
-        <div class="ms-item"><div class="ms-lbl">Principal Left</div><div class="ms-val" style="color:var(--secondary)">${fmt(calc.principalOutstanding)}</div></div>
-        <div class="ms-item"><div class="ms-lbl">Interest Left</div><div class="ms-val rv">${fmt(calc.interestRemaining)}</div></div>
+      <div class="ms" style="margin-bottom:10px">
+        <div class="ms-item"><div class="ms-lbl">Outstanding</div><div class="ms-val rv">${fmt(calc.outstanding)}</div></div>
+        <div class="ms-item"><div class="ms-lbl">Remaining</div><div class="ms-val av">${calc.remMonths} mo</div></div>
         <div class="ms-item"><div class="ms-lbl">Paid off by</div><div class="ms-val" style="font-size:10px">${fmtYM(calc.endYM)}</div></div>
       </div>
-      <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-          <span style="color:var(--secondary)">Principal ${prinPct}%</span>
-          <span style="color:var(--error)">Interest ${intPct}%</span>
-        </div>
-        <div style="height:8px;border-radius:var(--r-full);overflow:hidden;display:flex">
-          <div style="width:${prinPct}%;background:var(--secondary);transition:width .5s"></div>
-          <div style="width:${intPct}%;background:var(--error);transition:width .5s"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--on-surface-variant);margin-top:3px">
-          <span>Total outstanding: ${fmt(totalOwed)}</span>
-          <span>${calc.remMonths!==null?calc.remMonths+' mo left':'—'}</span>
-        </div>
-      </div>
       <div style="background:var(--surface-low);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:10px;border:1px solid var(--outline-variant)">
-        <div style="font-size:11px;color:var(--on-surface-variant);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-family:'Space Grotesk','Inter',sans-serif">This month's EMI · ${fmt(l.emi)}</div>
-        <div style="display:flex;gap:8px">
-          <div style="flex:1;text-align:center;padding:8px;background:rgba(224,82,82,.06);border-radius:var(--r-sm)">
-            <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px">Interest</div>
-            <div style="font-size:14px;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.curInt)}</div>
-            <div style="font-size:10px;color:var(--on-surface-variant)">${emiIntPct}% of EMI</div>
-          </div>
-          <div style="flex:1;text-align:center;padding:8px;background:rgba(61,133,204,.06);border-radius:var(--r-sm)">
-            <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px">Principal</div>
-            <div style="font-size:14px;font-family:'Nunito','Inter',sans-serif;color:var(--secondary)">${fmt(calc.curPrin)}</div>
-            <div style="font-size:10px;color:var(--on-surface-variant)">${emiPrinPct}% of EMI</div>
-          </div>
+        <div style="font-size:11px;color:var(--on-surface-variant);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-family:'Space Grotesk','Inter',sans-serif">This month's EMI breakdown</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--on-surface-variant)">Interest portion</span>
+          <span style="font-size:12px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.curInt)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:12px;color:var(--on-surface-variant)">Principal portion</span>
+          <span style="font-size:12px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.curPrin)}</span>
         </div>
       </div>
-      ${calc.schedule.length>1?loanChart(calc,lid):''}
-      ${calc.interestSaved>0?`<div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1;background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)">
+          <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Remaining</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--error)">${fmt(calc.interestRemaining)}</div>
+        </div>
+        <div style="flex:1;background:var(--surface-low);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--outline-variant)">
+          <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Paid</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--on-surface-variant)">${fmt(calc.interestPaidSoFar)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        ${calc.totalPrep>0?`<div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
+          <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Total Prepaid</div>
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.totalPrep)}</div>
+        </div>
         <div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
           <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Interest Saved</div>
-          <div style="font-size:13px;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.interestSaved)}</div>
-        </div>
-        <div style="flex:1;background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px 12px;border:1px solid rgba(91,197,167,.2)">
-          <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-family:'Space Grotesk','Inter',sans-serif">Months Saved</div>
-          <div style="font-size:13px;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${calc.monthsSaved} mo</div>
-        </div>
-      </div>`:''}
-      ${(l.prepayments||[]).length>0?`<div style="padding-top:10px;border-top:1px solid var(--outline-variant);margin-bottom:8px">
+          <div style="font-size:13px;font-weight:400;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(calc.interestSaved)} · ${calc.monthsSaved} mo</div>
+        </div>`:''}
+      </div>
+      <div style="font-size:11px;color:var(--on-surface-variant);text-align:right;margin-bottom:8px">${calc.remMonths!==null?calc.remMonths+' months remaining':'—'}</div>
+      ${(l.prepayments||[]).length>0?`<div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--outline-variant)">
         <div class="dlbl" style="margin-top:0">Prepayments</div>
-        ${(l.prepayments||[]).sort((a,b)=>a.date.localeCompare(b.date)).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
-          <div><div style="font-size:12px">${fmt(p.amt)}</div><div style="font-size:11px;color:var(--on-surface-variant)">${p.date}${p.note?' · '+p.note:''}</div></div>
+        ${(l.prepayments||[]).sort((a,b)=>a.date.localeCompare(b.date)).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0">
+          <div><div style="font-size:12px;font-weight:500">${fmt(p.amt)}</div><div style="font-size:11px;color:var(--on-surface-variant)">${p.date}${p.note?' · '+p.note:''}</div></div>
           <button onclick="delPrepayment('${l.id}','${p.id}')" style="border:none;background:none;color:var(--error);font-size:12px;cursor:pointer;padding:4px 8px">✕</button>
         </div>`).join('')}
       </div>`:''}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
         <button class="sbtn" style="margin:0;font-size:12px;padding:10px" onclick="openAddPrepayment('${l.id}')">+ Prepayment</button>
         <button class="xbtn" style="margin:0;font-size:12px;padding:10px" onclick="openEditLoan('${l.id}')">Edit Loan</button>
       </div>
@@ -1230,9 +1117,7 @@ function openEditExp(id){
   if(e.sp===50&&e.ss===50)spSel='5';
   else if(e.sp===100)spSel='P';
   else if(e.ss===100)spSel='S';
-  const swNote=e.src==='sw'?(e.needsCat&&!e.cat
-    ?`<div style="font-size:11px;color:var(--error);padding:8px 10px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:12px">⚠️ Category not recognised from Splitwise description — please select a category and save.</div>`
-    :`<div style="font-size:11px;color:var(--primary-dark);padding:8px 10px;background:rgba(91,197,167,.08);border-radius:var(--r-sm);margin-bottom:12px">📥 Imported from Splitwise</div>`):'';
+  const swNote=e.src==='sw'?`<div style="font-size:11px;color:var(--primary-dark);padding:8px 10px;background:rgba(91,197,167,.08);border-radius:var(--r-sm);margin-bottom:12px">📥 Imported from Splitwise</div>`:'';
   showM('Edit Expense',`${swNote}
     <div class="fg"><label class="flbl">Description</label><input class="fi" id="ed" value="${e.d}"></div>
     <div class="frow">
@@ -1269,8 +1154,6 @@ function subEditExp(id){
   e.pb=document.getElementById('epb').value;
   e.date=document.getElementById('edate').value||e.date;
   e.sp=spP;e.ss=spS;
-  // Mark as manually categorised so SW sync won't overwrite
-  if(e.src==='sw'){e._catManual=true;e.needsCat=false;}
   ss();closeM();render();toast('Saved ✓');
 }
 function delExp(id){if(!confirm('Delete?'))return;D.expenses=D.expenses.filter(x=>x.id!==id);ss();closeM();render();}
