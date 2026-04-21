@@ -1665,137 +1665,121 @@ function exportExcel(){
 }
 
 function importExcel(inp){
-  const file = inp.files[0]; if(!file) return;
-  _loadFflate(() => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        if(!confirm('This will REPLACE ALL app data with the Excel contents. Are you sure?')){inp.value='';return;}
+  const file=inp.files[0];if(!file)return;
+  _loadFflate(()=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        if(!confirm('This will REPLACE ALL app data. Are you sure?')){inp.value='';return;}
 
-        const bytes = new Uint8Array(ev.target.result);
-        const unzipped = fflate.unzipSync(bytes);
-        const dec = new TextDecoder();
+        const bytes=new Uint8Array(ev.target.result);
+        const unzipped=fflate.unzipSync(bytes);
+        const dec=new TextDecoder();
+        const getXml=p=>unzipped[p]?dec.decode(unzipped[p]):null;
 
-        const getXml = path => unzipped[path] ? dec.decode(unzipped[path]) : null;
+        // ── helpers ───────────────────────────────────────────
+        const pStr=v=>String(v==null?'':v).trim();
+        const pNum=v=>parseFloat(String(v||'0').replace(/[^\d.-]/g,''))||0;
+        const pDate=v=>{
+          if(!v&&v!==0)return'';
+          if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
+          if(typeof v==='string'&&/^\d{4}-\d{2}$/.test(v))return v;
+          if(typeof v==='number'&&Number.isInteger(v)&&v>10000){
+            const d=new Date(Date.UTC(1899,11,30)+v*86400000);
+            return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+          }
+          return String(v||'');
+        };
+        const findHdr=(rows,kw)=>{
+          for(let i=0;i<Math.min(rows.length,5);i++){
+            if(rows[i]&&rows[i].join('').toLowerCase().includes(kw))return i;
+          }
+          return -1;
+        };
 
-        // Parse a worksheet XML into array of arrays
-        function parseSheet(xml) {
-          if(!xml) return [];
-
-          // Pre-parse shared strings once
-          const ssXml = getXml('xl/sharedStrings.xml')||'';
-          const sharedStrs = [];
-          const siRe = /<si>([\s\S]*?)<\/si>/g;
-          let siM;
+        // ── shared strings ────────────────────────────────────
+        const ssXml=getXml('xl/sharedStrings.xml')||'';
+        const sharedStrs=[];
+        if(ssXml){
+          const siRe=/<si>([\s\S]*?)<\/si>/g;let siM;
           while((siM=siRe.exec(ssXml))!==null){
-            // Concatenate all <t> values within this <si> (handles rich text)
-            const tVals = [];
-            const tRe = /<t[^>]*>([^<]*)<\/t>/g;
-            let tM;
-            while((tM=tRe.exec(siM[1]))!==null) tVals.push(tM[1]);
-            sharedStrs.push(tVals.join('').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#xD;/g,'').replace(/&#xA;/g,' '));
+            const tVals=[];const tRe=/<t[^>]*>([^<]*)<\/t>/g;let tM;
+            while((tM=tRe.exec(siM[1]))!==null)tVals.push(tM[1]);
+            sharedStrs.push(tVals.join('').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"'));
           }
+        }
 
-          // Excel date serial → YYYY-MM-DD
-          function serialToDate(serial){
-            const d = new Date(Date.UTC(1899,11,30) + Math.round(serial)*86400000);
-            const y = d.getUTCFullYear();
-            const m = String(d.getUTCMonth()+1).padStart(2,'0');
-            const day = String(d.getUTCDate()).padStart(2,'0');
-            return y+'-'+m+'-'+day;
-          }
-          // Convert a cell value to date string — only if it's a numeric serial or already YYYY-MM-DD string
-          function pDate(v){
-            if(!v && v!==0) return '';
-            if(typeof v==='string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0,10);
-            if(typeof v==='string' && /^\d{4}-\d{2}$/.test(v)) return v; // YYYY-MM for months
-            if(typeof v==='number' && Number.isInteger(v) && v>10000) return serialToDate(v);
-            return String(v||'');
-          }
-
-          const rows = [];
-          const rowMatches = xml.match(/<row[^>]*>[\s\S]*?<\/row>/g)||[];
-          rowMatches.forEach(rowXml => {
-            const rAttr = rowXml.match(/r="(\d+)"/);
-            const ri = rAttr ? parseInt(rAttr[1])-1 : rows.length;
-            while(rows.length <= ri) rows.push([]);
-            const row = rows[ri];
-            const cellMatches = rowXml.match(/<c[^>]*>[\s\S]*?<\/c>/g)||[];
-            cellMatches.forEach(cellXml => {
-              const refMatch = cellXml.match(/r="([A-Z]+)(\d+)"/);
-              if(!refMatch) return;
-              const colStr = refMatch[1];
-              let ci = 0;
-              for(let k=0; k<colStr.length; k++) ci = ci*26 + colStr.charCodeAt(k)-64;
-              ci -= 1;
-              while(row.length <= ci) row.push('');
-
-              // Get cell type
-              const tMatch = cellXml.match(/ t="([^"]+)"/);
-              const cellType = tMatch ? tMatch[1] : '';
-
-              const vMatch = cellXml.match(/<v>([\s\S]*?)<\/v>/);
-              const rawVal = vMatch ? vMatch[1] : '';
-
-              if(cellType==='s'){
-                // Shared string index
-                const idx = parseInt(rawVal)||0;
-                row[ci] = sharedStrs[idx]||'';
-              } else if(cellType==='inlineStr'){
-                const m = cellXml.match(/<t[^>]*>([\s\S]*?)<\/t>/);
-                row[ci] = m ? m[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : '';
-              } else if(cellType==='b'){
-                row[ci] = rawVal==='1';
-              } else if(cellType===''||cellType==='n'){
-                // Numeric — check if date formatted
-                if(rawVal==='') { row[ci]=''; return; }
-                const num = parseFloat(rawVal);
-                // Return raw number — date conversion done by pDate() in import logic
-                row[ci] = isNaN(num) ? rawVal : num;
+        // ── parse one worksheet XML → array of arrays ─────────
+        function parseSheet(xml){
+          if(!xml)return[];
+          const rows=[];
+          const rowRe=/<row[^>]*>([\s\S]*?)<\/row>/g;let rowM;
+          while((rowM=rowRe.exec(xml))!==null){
+            const rAttr=rowM[0].match(/\br="(\d+)"/);
+            const ri=rAttr?parseInt(rAttr[1])-1:rows.length;
+            while(rows.length<=ri)rows.push([]);
+            const row=rows[ri];
+            const cellRe=/<c([^>]*)>([\s\S]*?)<\/c>/g;let cellM;
+            while((cellM=cellRe.exec(rowM[1]))!==null){
+              const attrs=cellM[1];
+              const inner=cellM[2];
+              const refM=attrs.match(/\br="([A-Z]+)\d+"/);
+              if(!refM)continue;
+              const colStr=refM[1];
+              let ci=0;for(let k=0;k<colStr.length;k++)ci=ci*26+colStr.charCodeAt(k)-64;ci--;
+              while(row.length<=ci)row.push('');
+              const tM=attrs.match(/\bt="([^"]+)"/);
+              const ct=tM?tM[1]:'';
+              const vM=inner.match(/<v>([\s\S]*?)<\/v>/);
+              const raw=vM?vM[1]:'';
+              if(ct==='s'){
+                row[ci]=sharedStrs[parseInt(raw)]||'';
+              } else if(ct==='inlineStr'||ct==='str'){
+                const isM=inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+                row[ci]=isM?isM[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"'):'';
               } else {
-                row[ci] = rawVal;
+                // numeric — return as number; caller uses pDate() if it's a date column
+                const num=parseFloat(raw);
+                row[ci]=isNaN(num)?raw:num;
               }
-            });
-          });
+            }
+          }
           return rows;
         }
 
-        // Get sheet name → file mapping from workbook
-        const wbXml = getXml('xl/workbook.xml')||'';
-        const wbRels = getXml('xl/_rels/workbook.xml.rels')||'';
-        const sheetEls = wbXml.match(/<sheet [^/]*/g)||[];
-        const relEls = wbRels.match(/<Relationship [^>]*\/>/g)||[];
-        const sheetMap = {}; // name → xml
-        sheetEls.forEach(el => {
-          const nameM = el.match(/name="([^"]+)"/);
-          const ridM = el.match(/r:id="([^"]+)"/);
-          if(!nameM||!ridM) return;
-          const name = nameM[1];
-          const rid = ridM[1];
-          const rel = relEls.find(r=>r.includes(`Id="${rid}"`));
-          if(!rel) return;
-          const tgtM = rel.match(/Target="([^"]+)"/);
-          if(!tgtM) return;
-          const path = (()=>{ let t=tgtM[1].replace(/^\//,''); return t.startsWith('xl/')?t:'xl/'+t; })();
-          const xml = getXml(path);
-          if(xml) sheetMap[name] = parseSheet(xml);
+        // ── map sheet names → parsed rows ─────────────────────
+        const wbXml=getXml('xl/workbook.xml')||'';
+        const wbRels=getXml('xl/_rels/workbook.xml.rels')||'';
+        const sheetEls=wbXml.match(/<sheet [^>]*/g)||[];
+        const relEls=wbRels.match(/<Relationship [^>]*\/>/g)||[];
+        const sheetMap={};
+        sheetEls.forEach(el=>{
+          const nameM=el.match(/name="([^"]+)"/);
+          const ridM=el.match(/r:id="([^"]+)"/);
+          if(!nameM||!ridM)return;
+          const rel=relEls.find(r=>r.includes(`Id="${ridM[1]}"`));
+          if(!rel)return;
+          const tgtM=rel.match(/Target="([^"]+)"/);
+          if(!tgtM)return;
+          // Normalise path: strip leading /, ensure xl/ prefix
+          let t=tgtM[1].replace(/^\//,'');
+          const path=t.startsWith('xl/')?t:'xl/'+t;
+          const xml=getXml(path);
+          if(xml)sheetMap[nameM[1]]=parseSheet(xml);
         });
 
-        const pStr = v => String(v==null?'':v).trim();
-        const pNum = v => parseFloat(String(v||'0').replace(/[^\d.-]/g,''))||0;
-        const findHdr = (rows,kw) => { for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i]&&rows[i].join('').toLowerCase().includes(kw))return i;} return -1; };
-
-        let p1name=D.names.P, p2name=D.names.S;
+        // ── name→key maps (built after settings) ──────────────
+        let p1name=D.names.P,p2name=D.names.S;
 
         // 1. Settings
-        const settRows = sheetMap['Settings']||[];
-        if(settRows.length) {
+        const settRows=sheetMap['Settings']||[];
+        if(settRows.length){
           const map={};
           settRows.forEach(r=>{const k=pStr(r[0]).toLowerCase(),v=pStr(r[1]);if(k&&v)map[k]=v;});
           const g=(k,d)=>map[k]!=null?map[k]:String(d);
           p1name=g('person 1 name',D.names.P)||D.names.P;
           p2name=g('person 2 name',D.names.S)||D.names.S;
-          D.names.P=p1name; D.names.S=p2name;
+          D.names.P=p1name;D.names.S=p2name;
           D.inflows.P=parseInt(g('person 1 monthly income',D.inflows.P))||D.inflows.P;
           D.inflows.S=parseInt(g('person 2 monthly income',D.inflows.S))||D.inflows.S;
           D.splitRatio.P=parseInt(g('person 1 split %',D.splitRatio.P))||D.splitRatio.P;
@@ -1807,79 +1791,190 @@ function importExcel(inp){
         const n2k={[p1name.toLowerCase()]:'P',[p2name.toLowerCase()]:'S','both':'both','joint':'joint'};
         const p2k={[p1name.toLowerCase()]:'P',[p2name.toLowerCase()]:'S','joint':'joint'};
 
-        // 2. Budgets (pending — apply after categories)
-        const budRows = sheetMap['Budgets']||[];
+        // 2. Budgets (held, applied after categories)
         const pendingBudgets=[];
-        if(budRows.length){ const hdr=findHdr(budRows,'category'); if(hdr>=0){ budRows.slice(hdr+1).forEach(r=>{ const cn=pStr(r[0]).toLowerCase(),amt=pNum(r[1]); if(cn&&amt)pendingBudgets.push({catName:cn,b:amt}); }); } }
+        const budRows=sheetMap['Budgets']||[];
+        if(budRows.length){
+          const hdr=findHdr(budRows,'category');
+          if(hdr>=0)budRows.slice(hdr+1).forEach(r=>{
+            const cn=pStr(r[0]).toLowerCase(),amt=pNum(r[1]);
+            if(cn&&amt)pendingBudgets.push({catName:cn,b:amt});
+          });
+        }
 
         // 3. Investments
-        const invRows = sheetMap['Investments']||[];
-        if(invRows.length){ const hdr=findHdr(invRows,'name'); if(hdr>=0){ const hdrs=invRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('person')),amt:hdrs.findIndex(h=>h.includes('amount')||h.includes('invested')),tgt:hdrs.findIndex(h=>h.includes('target'))}; D.investments=[]; invRows.slice(hdr+1).forEach(r=>{ const name=pStr(r[ci.n]); if(!name)return; D.investments.push({id:pStr(r[ci.id])||'i'+uid(),n:name,p:p2k[pStr(r[ci.p]).toLowerCase()]||'P',amt:pNum(r[ci.amt]),tgt:pNum(r[ci.tgt])}); }); } }
+        const invRows=sheetMap['Investments']||[];
+        if(invRows.length){
+          const hdr=findHdr(invRows,'name');
+          if(hdr>=0){
+            const hdrs=invRows[hdr].map(h=>pStr(h).toLowerCase());
+            const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),
+              p:hdrs.findIndex(h=>h.includes('person')),
+              amt:hdrs.findIndex(h=>h.includes('amount')||h.includes('invested')),
+              tgt:hdrs.findIndex(h=>h.includes('target'))};
+            D.investments=[];
+            invRows.slice(hdr+1).forEach(r=>{
+              const name=pStr(r[ci.n]);if(!name)return;
+              D.investments.push({id:pStr(r[ci.id])||'i'+uid(),n:name,
+                p:p2k[pStr(r[ci.p]).toLowerCase()]||'P',
+                amt:pNum(r[ci.amt]),tgt:pNum(r[ci.tgt])});
+            });
+          }
+        }
 
-        // 4. Loans — cols A-H imported, cols I-M (calculated) ignored
-        const loanRows = sheetMap['Loans']||[];
-        if(loanRows.length){ const hdr=findHdr(loanRows,'loan name'); if(hdr>=0){ const hdrs=loanRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={
-          id:hdrs.indexOf('id'),
-          n:hdrs.findIndex(h=>h.includes('loan name')||h.includes('name')),
-          p:hdrs.findIndex(h=>h.includes('owner')),
-          emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),
-          rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),
-          prin:hdrs.findIndex(h=>h.includes('original')),
-          curBal:hdrs.findIndex(h=>h.includes('outstanding')),
-          startMonth:hdrs.findIndex(h=>h.includes('start')),
-        }; D.loans=[]; loanRows.slice(hdr+1).forEach(r=>{
-          if(!r||!r.length)return;
-          const name=pStr(r[ci.n]),emi=pNum(r[ci.emi]);
-          if(!name||!emi)return;
-          const principal=ci.prin>=0?pNum(r[ci.prin]):0;
-          const currentBalance=ci.curBal>=0?pNum(r[ci.curBal]):principal;
-          const startDate=ci.startMonth>=0?pDate(r[ci.startMonth]):'';
-          D.loans.push({
-            id:pStr(r[ci.id])||'l'+uid(),n:name,emi,
-            rate:ci.rate>=0?parseFloat(pStr(r[ci.rate]))||0:0,
-            principal,currentBalance:currentBalance||principal,
-            startDate,
-            p:n2k[pStr(r[ci.p]).toLowerCase()]||'joint',
-            prepayments:[]
-          });
-        }); } }
+        // 4. Loans (cols I-M are calculated, ignored on import)
+        const loanRows=sheetMap['Loans']||[];
+        if(loanRows.length){
+          const hdr=findHdr(loanRows,'loan name');
+          if(hdr>=0){
+            const hdrs=loanRows[hdr].map(h=>pStr(h).toLowerCase());
+            const ci={id:hdrs.indexOf('id'),
+              n:hdrs.findIndex(h=>h.includes('loan name')||h.includes('name')),
+              p:hdrs.findIndex(h=>h.includes('owner')),
+              emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),
+              rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),
+              prin:hdrs.findIndex(h=>h.includes('original')),
+              curBal:hdrs.findIndex(h=>h.includes('outstanding')),
+              startMonth:hdrs.findIndex(h=>h.includes('start'))};
+            D.loans=[];
+            loanRows.slice(hdr+1).forEach(r=>{
+              if(!r||!r.length)return;
+              const name=pStr(r[ci.n]),emi=pNum(r[ci.emi]);
+              if(!name||!emi)return;
+              const principal=ci.prin>=0?pNum(r[ci.prin]):0;
+              const currentBalance=ci.curBal>=0?pNum(r[ci.curBal]):principal;
+              const startDate=ci.startMonth>=0?pDate(r[ci.startMonth]):'';
+              D.loans.push({id:pStr(r[ci.id])||'l'+uid(),n:name,emi,
+                rate:ci.rate>=0?parseFloat(pStr(r[ci.rate]))||0:0,
+                principal,currentBalance:currentBalance||principal,
+                startDate,p:n2k[pStr(r[ci.p]).toLowerCase()]||'joint',
+                prepayments:[]});
+            });
+          }
+        }
 
         // 5. Prepayments
-        const prepRows = sheetMap['Prepayments']||[];
-        if(prepRows.length){ const hdr=findHdr(prepRows,'loan id'); if(hdr>=0){ const hdrs=prepRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={lid:hdrs.findIndex(h=>h.includes('loan id')),pid:hdrs.findIndex(h=>h.includes('prepayment id')),date:hdrs.findIndex(h=>h.includes('date')),amt:hdrs.findIndex(h=>h.includes('amount')),note:hdrs.findIndex(h=>h.includes('note'))}; prepRows.slice(hdr+1).forEach(r=>{ const loanId=pStr(r[ci.lid]),amt=pNum(r[ci.amt]),dateRaw=pDate(r[ci.date]); if(!loanId||!amt||!dateRaw)return; const loan=D.loans.find(l=>l.id===loanId); if(!loan)return; loan.prepayments.push({id:pStr(r[ci.pid])||'pp'+uid(),amt,date:dateRaw,note:ci.note>=0?pStr(r[ci.note]):''}); }); } }
+        const prepRows=sheetMap['Prepayments']||[];
+        if(prepRows.length){
+          const hdr=findHdr(prepRows,'loan id');
+          if(hdr>=0){
+            const hdrs=prepRows[hdr].map(h=>pStr(h).toLowerCase());
+            const ci={lid:hdrs.findIndex(h=>h.includes('loan id')),
+              pid:hdrs.findIndex(h=>h.includes('prepayment id')),
+              date:hdrs.findIndex(h=>h.includes('date')),
+              amt:hdrs.findIndex(h=>h.includes('amount')),
+              note:hdrs.findIndex(h=>h.includes('note'))};
+            prepRows.slice(hdr+1).forEach(r=>{
+              const loanId=pStr(r[ci.lid]),amt=pNum(r[ci.amt]);
+              const dateRaw=pDate(r[ci.date]);
+              if(!loanId||!amt||!dateRaw)return;
+              const loan=D.loans.find(l=>l.id===loanId);if(!loan)return;
+              loan.prepayments.push({id:pStr(r[ci.pid])||'pp'+uid(),amt,
+                date:dateRaw,note:ci.note>=0?pStr(r[ci.note]):''});
+            });
+          }
+        }
 
         // 6. Categories
-        const catRows = sheetMap['Categories']||[];
-        if(catRows.length){ const hdr=findHdr(catRows,'category name'); if(hdr>=0){ D.categories=[]; catRows.slice(hdr+1).forEach(r=>{ const catName=pStr(r[0]); if(!catName)return; const subs=r.slice(3).map(s=>pStr(s)).filter(Boolean).map(n=>({id:'s'+uid(),n})); D.categories.push({id:'c'+uid(),n:catName,i:pStr(r[1])||'📦',c:pStr(r[2])||'#9CA3AF',subs}); }); } }
+        const catRows=sheetMap['Categories']||[];
+        if(catRows.length){
+          const hdr=findHdr(catRows,'category name');
+          if(hdr>=0){
+            D.categories=[];
+            catRows.slice(hdr+1).forEach(r=>{
+              const catName=pStr(r[0]);if(!catName)return;
+              const subs=r.slice(3).map(s=>pStr(s)).filter(Boolean).map(n=>({id:'s'+uid(),n}));
+              D.categories.push({id:'c'+uid(),n:catName,i:pStr(r[1])||'📦',c:pStr(r[2])||'#9CA3AF',subs});
+            });
+          }
+        }
 
         // Apply budgets now categories exist
         const catMapI={};
-        D.categories.forEach(c=>{ catMapI[c.n.toLowerCase()]=c.id; (c.subs||[]).forEach(s=>{catMapI[c.id+'::'+s.n.toLowerCase()]=s.id;}); });
+        D.categories.forEach(c=>{
+          catMapI[c.n.toLowerCase()]=c.id;
+          (c.subs||[]).forEach(s=>{catMapI[c.id+'::'+s.n.toLowerCase()]=s.id;});
+        });
         if(pendingBudgets.length){
           D.budgets=pendingBudgets.map(b=>({cat:catMapI[b.catName]||b.catName,b:b.b})).filter(b=>b.cat);
           D.categories.forEach(c=>{if(!D.budgets.find(b=>b.cat===c.id))D.budgets.push({cat:c.id,b:5000});});
         }
 
         // 7. Expenses
-        const expRows = sheetMap['Expenses']||[];
-        if(expRows.length){ const hdr=findHdr(expRows,'description'); if(hdr>=0){ D.expenses=[]; const hdrs=expRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),date:hdrs.findIndex(h=>h.includes('date')),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')&&!h.includes('sub')),subcat:hdrs.findIndex(h=>h.includes('sub')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')||h==='p%'),ss:hdrs.findIndex(h=>h.includes('s split')||h==='s%')}; expRows.slice(hdr+1).forEach(r=>{ const desc=pStr(r[ci.desc]),dateRaw=pDate(r[ci.date]),amt=pNum(r[ci.amt]); if(!desc||!dateRaw||!amt)return; const catId=catMapI[pStr(r[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc'); const subId=catMapI[catId+'::'+pStr(r[ci.subcat]).toLowerCase()]||''; const pb=n2k[pStr(r[ci.pb]).toLowerCase()]||'both'; const sp=ci.sp>=0?Math.min(100,Math.max(0,parseInt(r[ci.sp])||0)):D.splitRatio.P; const ss=ci.ss>=0?Math.min(100,Math.max(0,parseInt(r[ci.ss])||0)):D.splitRatio.S; const exp={id:pStr(r[ci.id])||'e'+uid(),d:desc,cat:catId,amt,pb,date:dateRaw,sp,ss,by:'P'}; if(subId)exp.subcat=subId; D.expenses.push(exp); }); } }
+        const expRows=sheetMap['Expenses']||[];
+        if(expRows.length){
+          const hdr=findHdr(expRows,'description');
+          if(hdr>=0){
+            D.expenses=[];
+            const hdrs=expRows[hdr].map(h=>pStr(h).toLowerCase());
+            const ci={id:hdrs.indexOf('id'),
+              date:hdrs.findIndex(h=>h.includes('date')),
+              desc:hdrs.findIndex(h=>h.includes('description')),
+              cat:hdrs.findIndex(h=>h.includes('category')&&!h.includes('sub')),
+              subcat:hdrs.findIndex(h=>h.includes('sub')),
+              amt:hdrs.findIndex(h=>h.includes('amount')),
+              pb:hdrs.findIndex(h=>h.includes('paid')),
+              sp:hdrs.findIndex(h=>h.includes('p split')||h==='p%'),
+              ss:hdrs.findIndex(h=>h.includes('s split')||h==='s%')};
+            expRows.slice(hdr+1).forEach(r=>{
+              const desc=pStr(r[ci.desc]);
+              const dateRaw=pDate(r[ci.date]);
+              const amt=pNum(r[ci.amt]);
+              if(!desc||!dateRaw||!amt)return;
+              const catId=catMapI[pStr(r[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc');
+              const subId=catMapI[catId+'::'+pStr(r[ci.subcat]).toLowerCase()]||'';
+              const pb=n2k[pStr(r[ci.pb]).toLowerCase()]||'both';
+              const sp=ci.sp>=0?Math.min(100,Math.max(0,parseInt(r[ci.sp])||0)):D.splitRatio.P;
+              const ss=ci.ss>=0?Math.min(100,Math.max(0,parseInt(r[ci.ss])||0)):D.splitRatio.S;
+              const exp={id:pStr(r[ci.id])||'e'+uid(),d:desc,cat:catId,amt,pb,date:dateRaw,sp,ss,by:'P'};
+              if(subId)exp.subcat=subId;
+              D.expenses.push(exp);
+            });
+          }
+        }
 
         // 8. Recurring
-        const recRows = sheetMap['Recurring']||[];
-        if(recRows.length){ const hdr=findHdr(recRows,'description'); if(hdr>=0){ D.recurring=[]; const hdrs=recRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),desc:hdrs.findIndex(h=>h.includes('description')),cat:hdrs.findIndex(h=>h.includes('category')),amt:hdrs.findIndex(h=>h.includes('amount')),pb:hdrs.findIndex(h=>h.includes('paid')),sp:hdrs.findIndex(h=>h.includes('p split')),ss:hdrs.findIndex(h=>h.includes('s split')),from:hdrs.findIndex(h=>h.includes('from'))}; recRows.slice(hdr+1).forEach(r=>{ const desc=pStr(r[ci.desc]),amt=pNum(r[ci.amt]); if(!desc||!amt)return; const catId=catMapI[pStr(r[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc'); const pb=n2k[pStr(r[ci.pb]).toLowerCase()]||'both'; const sp=ci.sp>=0?parseInt(r[ci.sp])||50:50; const ss=ci.ss>=0?parseInt(r[ci.ss])||50:50; D.recurring.push({id:pStr(r[ci.id])||'r'+uid(),d:desc,cat:catId,amt,pb,sp,ss,from:pDate(r[ci.from])||ymKey(cm.y,cm.m)}); }); } }
+        const recRows=sheetMap['Recurring']||[];
+        if(recRows.length){
+          const hdr=findHdr(recRows,'description');
+          if(hdr>=0){
+            D.recurring=[];
+            const hdrs=recRows[hdr].map(h=>pStr(h).toLowerCase());
+            const ci={id:hdrs.indexOf('id'),
+              desc:hdrs.findIndex(h=>h.includes('description')),
+              cat:hdrs.findIndex(h=>h.includes('category')),
+              amt:hdrs.findIndex(h=>h.includes('amount')),
+              pb:hdrs.findIndex(h=>h.includes('paid')),
+              sp:hdrs.findIndex(h=>h.includes('p split')),
+              ss:hdrs.findIndex(h=>h.includes('s split')),
+              from:hdrs.findIndex(h=>h.includes('from'))};
+            recRows.slice(hdr+1).forEach(r=>{
+              const desc=pStr(r[ci.desc]),amt=pNum(r[ci.amt]);
+              if(!desc||!amt)return;
+              const catId=catMapI[pStr(r[ci.cat]).toLowerCase()]||(D.categories[0]?.id||'misc');
+              const pb=n2k[pStr(r[ci.pb]).toLowerCase()]||'both';
+              const sp=ci.sp>=0?parseInt(r[ci.sp])||50:50;
+              const ss=ci.ss>=0?parseInt(r[ci.ss])||50:50;
+              const from=pDate(r[ci.from])||ymKey(cm.y,cm.m);
+              D.recurring.push({id:pStr(r[ci.id])||'r'+uid(),d:desc,cat:catId,amt,pb,sp,ss,from});
+            });
+          }
+        }
 
-        ss(); render();
+        ss();render();
         toast('Data replaced — syncing…');
         setTimeout(async()=>{
           try{
-            const res=await fetch(FB_URL+'/psbudget.json',{method:'PUT',body:JSON.stringify({...D,_t:Date.now()}),headers:{'Content-Type':'application/json'}});
+            const res=await fetch(FB_URL+'/psbudget.json',{method:'PUT',
+              body:JSON.stringify({...D,_t:Date.now()}),
+              headers:{'Content-Type':'application/json'}});
             setSyncStatus(res.ok?'ok':'error',res.ok?'Synced':'Sync failed');
             if(res.ok)toast('Synced to Firebase!');
           }catch(e){setSyncStatus('error','Offline');toast('Saved locally, no internet');}
         },100);
 
-      } catch(err) {
-        console.error('Excel import error:', err);
+      }catch(err){
+        console.error('Excel import error:',err);
         toast('Could not read Excel: '+err.message);
       }
       inp.value='';
