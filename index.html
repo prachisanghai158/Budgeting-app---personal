@@ -203,7 +203,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
     <button class="tab" onclick="showTab('budget',this)">Budget</button>
     <button class="tab" onclick="showTab('invest',this)">Investments</button>
     <button class="tab" onclick="showTab('loans',this)">Loans</button>
-    <button class="tab" onclick="showTab('settle',this)">Settle Up</button>
     <button class="tab" onclick="showTab('trends',this)">Trends</button>
     <button class="tab" onclick="showTab('settings',this)">Settings</button>
   </div>
@@ -214,7 +213,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
     <button class="nbtn" onclick="showTab('budget',null);setNA(this)"><span class="nicon">🎯</span>Budget</button>
     <button class="nbtn" onclick="showTab('invest',null);setNA(this)"><span class="nicon">📈</span>Invest</button>
     <button class="nbtn" onclick="showTab('loans',null);setNA(this)"><span class="nicon">🏠</span>Loans</button>
-    <button class="nbtn" onclick="showTab('settle',null);setNA(this)"><span class="nicon">🤝</span>Settle</button>
   </div>
 </div>
 <div class="overlay" id="modal" style="display:none" onclick="if(event.target===this)closeM()">
@@ -391,17 +389,27 @@ function setSwSyncStatus(s,msg){
 }
 // Parse first two words of SW description as "CategoryName SubcategoryName"
 // Returns {cat, subcat, needsCat} — needsCat=true means no match found
-function swCatFromDesc(desc){
+function swCatFromDesc(desc, groupId){
+  const cats=D.categories||[];
+
+  // If this expense comes from a group named 'momo', auto-assign Momo category
+  // but keep needsCat=true (red highlight) until subcategory is set
+  if(groupId){
+    const grp=(D.swGroups||[]).find(g=>g.id===groupId);
+    if(grp&&grp.name&&grp.name.toLowerCase().includes('momo')){
+      const momoCat=cats.find(c=>c.n.toLowerCase().includes('momo'));
+      if(momoCat) return{cat:momoCat.id,subcat:'',needsCat:true}; // red until subcat chosen
+    }
+  }
+
+  // Otherwise parse first two words as category / subcategory
   const words=(desc||'').trim().split(/\s+/);
   const w1=(words[0]||'').toLowerCase();
   const w2=(words[1]||'').toLowerCase();
-  // Try to match first word to a category name or id
-  const cats=D.categories||[];
   let matchedCat=null,matchedSub=null;
   for(const c of cats){
     if(c.n.toLowerCase().startsWith(w1)||c.id.toLowerCase()===w1){
       matchedCat=c;
-      // Try second word as subcategory
       if(w2){
         for(const s of (c.subs||[])){
           if(s.n.toLowerCase().startsWith(w2)){matchedSub=s;break;}
@@ -458,7 +466,7 @@ async function syncSplitwise(){
           const tot=owP+owS;
           const sp=tot>0?Math.round(owP/tot*100):D.splitRatio.P;
           const desc=e.description||'Splitwise expense';
-          const {cat,subcat,needsCat}=swCatFromDesc(desc);
+          const {cat,subcat,needsCat}=swCatFromDesc(desc,grp.id);
           if(swIdMap[sid]!=null){
             const ex=D.expenses[swIdMap[sid]];
             ex.amt=Math.round(total);ex.pb=pb;ex.sp=sp;ex.ss=100-sp;
@@ -622,15 +630,22 @@ function subTotals(catId,exps){
   exps.filter(e=>e.cat===catId).forEach(e=>{const k=e.subcat||'__none';t[k]=(t[k]||0)+e.amt;});
   return t;
 }
+// App start date — months before this are shown blank in trends
+const APP_START='2026-04'; // YYYY-MM — show blank for months before this
 function monthlyData(n=6){
   const months=[];
   for(let i=n-1;i>=0;i--){
     let y=cm.y,m=cm.m-i;
     while(m<0){m+=12;y--;}
     const k=y+'-'+String(m+1).padStart(2,'0');
+    // Months before app start are blank — no expenses, no recurring
+    if(k<APP_START){
+      months.push({label:MN[m],y,m,total:0,exps:[],blank:true});
+      continue;
+    }
     const exps=(D.expenses||[]).filter(e=>e.date&&e.date.startsWith(k));
     const recT=recTotal('H');
-    months.push({label:MN[m],y,m,total:exps.reduce((a,e)=>a+e.amt,0)+recT,exps});
+    months.push({label:MN[m],y,m,total:exps.reduce((a,e)=>a+e.amt,0)+recT,exps,blank:false});
   }
   return months;
 }
@@ -695,7 +710,7 @@ function showTab(t,el){
 function setNA(b){document.querySelectorAll('.nbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');}
 function render(){
   updHero();
-  const fn={exp:rExp,budget:rBudget,invest:rInvest,loans:rLoans,settle:rSettle,trends:rTrends,settings:rSettings};
+  const fn={exp:rExp,budget:rBudget,invest:rInvest,loans:rLoans,trends:rTrends,settings:rSettings};
   document.getElementById('content').innerHTML=(fn[ctab]||rExp)();
 }
 function toggleCat(key){
@@ -1084,6 +1099,12 @@ function rTrends(){
   <svg width="${cW}" height="160" style="display:block">`;
   months.forEach((mo,i)=>{
     const x=20+i*((cW-40)/Math.max(months.length-1,1));
+    if(mo.blank){
+      // Blank month — just show label with dash
+      h+=`<text x="${x}" y="148" text-anchor="middle" font-size="10" fill="#C4C9D4" font-family="Space Grotesk,Inter,sans-serif">${mo.label}</text>`;
+      h+=`<text x="${x}" y="120" text-anchor="middle" font-size="9" fill="#C4C9D4" font-family="Nunito,Inter,sans-serif">—</text>`;
+      return;
+    }
     const barH=Math.max(4,Math.round(mo.total/maxT*100));
     const y=130-barH;
     const clr=(D.categories[0]?.c||'#5BC5A7');
@@ -1136,20 +1157,29 @@ function rTrends(){
   const midY=55,pts=[];
   months.forEach((mo,i)=>{
     const x=20+i*(Math.floor((sW-40)/months.length));
+    if(mo.blank){pts.push(null);return;} // skip blank months
     const norm=balances[i]/maxB;const y=midY-norm*45;
     pts.push([x,y]);
   });
   h+=`<line x1="10" y1="${midY}" x2="${sW-10}" y2="${midY}" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>`;
-  if(pts.length>1){
-    const pathD='M'+pts.map(p=>p.join(',')).join(' L');
-    const areaD=pathD+` L${pts[pts.length-1][0]},${midY} L${pts[0][0]},${midY} Z`;
+  const validPts=pts.filter(p=>p!==null);
+  if(validPts.length>1){
+    const pathD='M'+validPts.map(p=>p.join(',')).join(' L');
+    const areaD=pathD+` L${validPts[validPts.length-1][0]},${midY} L${validPts[0][0]},${midY} Z`;
     h+=`<path d="${areaD}" fill="url(#balGrad)"/>`;
     h+=`<path d="${pathD}" fill="none" stroke="#5BC5A7" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
   }
-  pts.forEach(([x,y],i)=>{
+  pts.forEach((pt,i)=>{
+    const mo=months[i];
+    const x=20+i*(Math.floor((sW-40)/months.length));
+    if(pt===null){
+      h+=`<text x="${x}" y="112" text-anchor="middle" font-size="10" fill="#C4C9D4" font-family="Space Grotesk,Inter,sans-serif">${mo.label}</text>`;
+      return;
+    }
+    const [px,py]=pt;
     const clr=balances[i]>=0?'#3DAE8F':'#E05252';
-    h+=`<circle cx="${x}" cy="${y}" r="4" fill="${clr}"/>`;
-    h+=`<text x="${x}" y="112" text-anchor="middle" font-size="10" fill="#6B7280" font-family="Space Grotesk,Inter,sans-serif">${months[i].label}</text>`;
+    h+=`<circle cx="${px}" cy="${py}" r="4" fill="${clr}"/>`;
+    h+=`<text x="${px}" y="112" text-anchor="middle" font-size="10" fill="#6B7280" font-family="Space Grotesk,Inter,sans-serif">${mo.label}</text>`;
   });
   h+=`</svg></div></div>`;
   return h;
