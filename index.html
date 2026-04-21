@@ -783,10 +783,13 @@ function rExp(){
       const meta=sub?`${ci.n} › ${sub.n}`:ci.n;
       const myAmt=view==='H'?e.amt:view==='P'?e.amt*(e.sp/100):e.amt*(e.ss/100);
       const swTag=e.src==='sw'?`<span class="sw-badge">SW</span>`:'';
-      const needsFlag=e.needsCat&&!e.cat;
+      const needsFlag=!!e.needsCat;
       const rowStyle=needsFlag?'background:rgba(224,82,82,.07);border-radius:var(--r-sm);margin:2px -4px;padding:0 4px;':'';
-      const catWarn=needsFlag?`<span style="font-size:9px;padding:2px 6px;border-radius:var(--r-full);background:rgba(224,82,82,.15);color:var(--error);margin-left:4px;vertical-align:middle">⚠ fix category</span>`:'';
-      h+=`<div class="eitem" style="${rowStyle}" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${needsFlag?'rgba(224,82,82,.15)':ci.c+'18'}">${needsFlag?'❓':ci.i}</div><div class="einfo"><div class="ename">${e.d}${swTag}${catWarn}</div><div class="emeta">${needsFlag?'<span style=\'color:var(--error)\'>Uncategorised — tap to fix</span>':meta+' · '+D.names.P+' '+e.sp+'% / '+D.names.S+' '+e.ss+'%'}</div></div><div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
+      const needsSubcat=needsFlag&&!!e.cat; // has category but missing subcategory
+      const warnLabel=needsSubcat?'⚠ fix subcategory':'⚠ fix category';
+      const warnMeta=needsSubcat?`${ci.i} ${ci.n} — <span style='color:var(--error)'>pick a subcategory</span>`:'<span style=\'color:var(--error)\'>Uncategorised — tap to fix</span>';
+      const catWarn=needsFlag?`<span style="font-size:9px;padding:2px 6px;border-radius:var(--r-full);background:rgba(224,82,82,.15);color:var(--error);margin-left:4px;vertical-align:middle">${warnLabel}</span>`:'';
+      h+=`<div class="eitem" style="${rowStyle}" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${needsFlag?'rgba(224,82,82,.15)':ci.c+'18'}">${needsFlag?(needsSubcat?ci.i:'❓'):ci.i}</div><div class="einfo"><div class="ename">${e.d}${swTag}${catWarn}</div><div class="emeta">${needsFlag?warnMeta:meta+' · '+D.names.P+' '+e.sp+'% / '+D.names.S+' '+e.ss+'%'}</div></div><div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
     });
     h+='</div>';
   });
@@ -1277,7 +1280,7 @@ function openEditExp(id){
   if(e.sp===50&&e.ss===50)spSel='5';
   else if(e.sp===100)spSel='P';
   else if(e.ss===100)spSel='S';
-  const swNote=e.src==='sw'?(e.needsCat&&!e.cat
+  const swNote=e.src==='sw'?(e.needsCat
     ?`<div style="font-size:11px;color:var(--error);padding:8px 10px;background:rgba(224,82,82,.08);border-radius:var(--r-sm);margin-bottom:12px">⚠️ Category not recognised from Splitwise description — please select a category and save.</div>`
     :`<div style="font-size:11px;color:var(--primary-dark);padding:8px 10px;background:rgba(91,197,167,.08);border-radius:var(--r-sm);margin-bottom:12px">📥 Imported from Splitwise</div>`):'';
   showM('Edit Expense',`${swNote}
