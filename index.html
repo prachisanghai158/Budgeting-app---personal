@@ -1579,11 +1579,20 @@ function exportExcel(){
       });
       sheets.push({name:'Investments', rows:invRows});
 
-      // 4. Loans
-      const loanRows = [['ID','Loan Name','Owner','EMI / Month (Rs)','Interest Rate %','Original Principal (Rs)','Current Outstanding (Rs)']];
+      // 4. Loans — cols A-H editable, cols I-M auto-calculated from amortization
+      const loanRows = [['ID','Loan Name','Owner','EMI / Month (Rs)','Interest Rate %','Original Principal (Rs)','Current Outstanding (Rs) ★ enter from bank statement','Loan Start Month (YYYY-MM)','Loan End Month [calc]','This Month Interest [calc]','This Month Principal [calc]','Total Interest Remaining [calc]','Months Remaining [calc]']];
       (D.loans||[]).forEach(l => {
         const who = l.p==='joint'?'Joint':l.p==='P'?D.names.P:D.names.S;
-        loanRows.push([l.id, l.n, who, l.emi, l.rate, l.principal||0, l.currentBalance||l.principal||0]);
+        const calc = loanCalc(l);
+        loanRows.push([
+          l.id, l.n, who, l.emi, l.rate, l.principal||0, l.currentBalance||l.principal||0,
+          l.startDate||'',
+          calc.endYM||'',
+          calc.curInt||0,
+          calc.curPrin||0,
+          calc.interestRemaining||0,
+          calc.remMonths||0
+        ]);
       });
       sheets.push({name:'Loans', rows:loanRows});
 
@@ -1771,9 +1780,33 @@ function importExcel(inp){
         const invRows = sheetMap['Investments']||[];
         if(invRows.length){ const hdr=findHdr(invRows,'name'); if(hdr>=0){ const hdrs=invRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('name')),p:hdrs.findIndex(h=>h.includes('person')),amt:hdrs.findIndex(h=>h.includes('amount')||h.includes('invested')),tgt:hdrs.findIndex(h=>h.includes('target'))}; D.investments=[]; invRows.slice(hdr+1).forEach(r=>{ const name=pStr(r[ci.n]); if(!name)return; D.investments.push({id:pStr(r[ci.id])||'i'+uid(),n:name,p:p2k[pStr(r[ci.p]).toLowerCase()]||'P',amt:pNum(r[ci.amt]),tgt:pNum(r[ci.tgt])}); }); } }
 
-        // 4. Loans
+        // 4. Loans — cols A-H imported, cols I-M (calculated) ignored
         const loanRows = sheetMap['Loans']||[];
-        if(loanRows.length){ const hdr=findHdr(loanRows,'loan name'); if(hdr>=0){ const hdrs=loanRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={id:hdrs.indexOf('id'),n:hdrs.findIndex(h=>h.includes('loan name')||h.includes('name')),p:hdrs.findIndex(h=>h.includes('owner')),emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),prin:hdrs.findIndex(h=>h.includes('original')),curBal:hdrs.findIndex(h=>h.includes('outstanding'))}; D.loans=[]; loanRows.slice(hdr+1).forEach(r=>{ const name=pStr(r[ci.n]),emi=pNum(r[ci.emi]); if(!name||!emi)return; const principal=ci.prin>=0?pNum(r[ci.prin]):0; const currentBalance=ci.curBal>=0?pNum(r[ci.curBal]):principal; D.loans.push({id:pStr(r[ci.id])||'l'+uid(),n:name,emi,rate:ci.rate>=0?parseFloat(pStr(r[ci.rate]))||0:0,principal,currentBalance:currentBalance||principal,p:n2k[pStr(r[ci.p]).toLowerCase()]||'joint',prepayments:[]}); }); } }
+        if(loanRows.length){ const hdr=findHdr(loanRows,'loan name'); if(hdr>=0){ const hdrs=loanRows[hdr].map(h=>pStr(h).toLowerCase()); const ci={
+          id:hdrs.indexOf('id'),
+          n:hdrs.findIndex(h=>h.includes('loan name')||h.includes('name')),
+          p:hdrs.findIndex(h=>h.includes('owner')),
+          emi:hdrs.findIndex(h=>h.includes('emi')||h.includes('month')),
+          rate:hdrs.findIndex(h=>h.includes('rate')||h.includes('interest')),
+          prin:hdrs.findIndex(h=>h.includes('original')),
+          curBal:hdrs.findIndex(h=>h.includes('outstanding')),
+          startMonth:hdrs.findIndex(h=>h.includes('start')),
+        }; D.loans=[]; loanRows.slice(hdr+1).forEach(r=>{
+          if(!r||!r.length)return;
+          const name=pStr(r[ci.n]),emi=pNum(r[ci.emi]);
+          if(!name||!emi)return;
+          const principal=ci.prin>=0?pNum(r[ci.prin]):0;
+          const currentBalance=ci.curBal>=0?pNum(r[ci.curBal]):principal;
+          const startDate=ci.startMonth>=0?pStr(r[ci.startMonth]):'';
+          D.loans.push({
+            id:pStr(r[ci.id])||'l'+uid(),n:name,emi,
+            rate:ci.rate>=0?parseFloat(pStr(r[ci.rate]))||0:0,
+            principal,currentBalance:currentBalance||principal,
+            startDate,
+            p:n2k[pStr(r[ci.p]).toLowerCase()]||'joint',
+            prepayments:[]
+          });
+        }); } }
 
         // 5. Prepayments
         const prepRows = sheetMap['Prepayments']||[];
