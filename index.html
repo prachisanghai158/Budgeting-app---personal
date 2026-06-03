@@ -605,19 +605,22 @@ function recTotal(who){
     return a;
   },0);
 }
+function isPrepayment(inv){
+  return (inv.n||'').toLowerCase().includes('prepay');
+}
 function stats(who='H'){
   const ex=mExps();
   const recT=recTotal(who);
   let te=0,ti=D.inflows.P+D.inflows.S,inv=0,tgt=0;
   if(who==='H'){
     te=ex.reduce((a,e)=>a+e.amt,0)+recT;
-    inv=(D.investments||[]).reduce((a,i)=>a+i.amt,0);
-    tgt=D.invTargets.P+D.invTargets.S+D.prepTarget;
+    inv=(D.investments||[]).filter(i=>!isPrepayment(i)).reduce((a,i)=>a+i.amt,0);
+    tgt=D.invTargets.P+D.invTargets.S;
   } else {
     te=ex.reduce((a,e)=>a+e.amt*(who==='P'?e.sp/100:e.ss/100),0)+recT;
     ti=D.inflows[who];
-    inv=(D.investments||[]).filter(i=>i.p===who||(i.p==='joint'&&who==='P')).reduce((a,i)=>a+(i.p==='joint'?i.amt/2:i.amt),0);
-    tgt=D.invTargets[who]+(who==='P'?D.prepTarget/2:D.prepTarget/2);
+    inv=(D.investments||[]).filter(i=>!isPrepayment(i)&&(i.p===who||(i.p==='joint'&&who==='P'))).reduce((a,i)=>a+(i.p==='joint'?i.amt/2:i.amt),0);
+    tgt=D.invTargets[who];
   }
   const remaining=ti-tgt-te;
   const sr=ti>0?Math.round(inv/ti*100):0;
