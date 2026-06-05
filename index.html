@@ -241,9 +241,15 @@ const gSub=(catId,subId)=>(gCat(catId).subs||[]).find(s=>s.id===subId)||null;
 function dispName(e){
   if(!e||!e.d)return'';
   const words=e.d.trim().split(/\s+/);
-  if(words.length<3)return e.d;
   const ci=gCat(e.cat);
   const sub=e.subcat?gSub(e.cat,e.subcat):null;
+  // Splitwise MOMO group: category is always Momo, so if first word matches subcategory, strip it
+  const swGroup=(D.swGroups||[]).find(g=>e.swGroup&&String(g.id)===String(e.swGroup));
+  if(swGroup&&(swGroup.name||'').toLowerCase()==='momo'){
+    if(sub&&words[0].toLowerCase()===(sub.n||'').toLowerCase())return words.length>1?words.slice(1).join(' '):e.d;
+    return e.d;
+  }
+  if(words.length<3)return e.d;
   if(!sub)return e.d;
   const w0=words[0].toLowerCase(),w1=words[1].toLowerCase();
   const catN=(ci.n||'').toLowerCase(),subN=(sub.n||'').toLowerCase();
