@@ -201,6 +201,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
   <div class="tabs">
     <button class="tab active" onclick="showTab('exp',this)">Expenses</button>
     <button class="tab" onclick="showTab('budget',this)">Budget</button>
+    <button class="tab" onclick="showTab('snapshot',this)">Snapshot</button>
     <button class="tab" onclick="showTab('invest',this)">Investments</button>
     <button class="tab" onclick="showTab('loans',this)">Loans</button>
     <button class="tab" onclick="showTab('trends',this)">Trends</button>
@@ -242,6 +243,7 @@ let view='H';
 let cu='P', ctab='exp', cm={y:new Date().getFullYear(),m:new Date().getMonth()};
 let FB_URL='https://budgeting-9de34-default-rtdb.firebaseio.com';
 let expandedCats={};
+let expandedSubcats={};
 
 let D={
   names:{P:'Prachi',S:'Shourya'},
@@ -733,7 +735,7 @@ function showTab(t,el){
 function setNA(b){document.querySelectorAll('.nbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');}
 function render(){
   updHero();
-  const fn={exp:rExp,budget:rBudget,invest:rInvest,loans:rLoans,trends:rTrends,settings:rSettings};
+  const fn={exp:rExp,budget:rBudget,snapshot:rSnapshot,invest:rInvest,loans:rLoans,trends:rTrends,settings:rSettings};
   document.getElementById('content').innerHTML=(fn[ctab]||rExp)();
 }
 function toggleCat(key){
@@ -741,6 +743,12 @@ function toggleCat(key){
   const chev=document.getElementById('chev-'+key),panel=document.getElementById('panel-'+key);
   if(chev)chev.classList.toggle('open',expandedCats[key]);
   if(panel)panel.classList.toggle('open',expandedCats[key]);
+}
+function toggleSubcat(key){
+  expandedSubcats[key]=!expandedSubcats[key];
+  const chev=document.getElementById('schev-'+key),panel=document.getElementById('spanel-'+key);
+  if(chev)chev.classList.toggle('open',expandedSubcats[key]);
+  if(panel)panel.classList.toggle('open',expandedSubcats[key]);
 }
 
 // ── EXPENSES RENDERER ─────────────────────────
@@ -842,18 +850,207 @@ function rBudget(){
     if(hasSubs){
       h+=catExpandRow(key,ci,labelHtml,isOpen);
       h+=`<div class="subcat-panel${isOpen?' open':''}" id="panel-${key}">`;
+      // Each subcategory is expandable to show individual entries
       subs.forEach(s=>{
-        const sv=st[s.id]||0;if(!sv&&!isOpen)return;
+        const sv=st[s.id]||0;
+        const subKey='bs-'+b.cat+'-'+s.id,subOpen=!!expandedSubcats[subKey];
         const sp2=spent>0?Math.min(Math.round(sv/spent*100),100):0;
-        h+=`<div class="subcat-row"><div style="flex:1;min-width:0"><div class="subcat-bar-label"><span>${s.n}</span><span>${fmt(sv)}</span></div><div class="subcat-track"><div class="subcat-fill" style="width:${sp2}%;background:${ci.c}88"></div></div></div></div>`;
+        const subExps=catExps.filter(e=>e.subcat===s.id);
+        const hasEntries=subExps.length>0;
+        h+=`<div class="subcat-row" style="cursor:${hasEntries?'pointer':'default'};padding-right:4px" ${hasEntries?`onclick="toggleSubcat('${subKey}')"`:''}><div style="flex:1;min-width:0"><div class="subcat-bar-label"><span style="display:flex;align-items:center;gap:4px">${s.n}${hasEntries?`<span style="font-size:9px;color:var(--on-surface-variant)">(${subExps.length})</span>`:''}</span><span style="display:flex;align-items:center;gap:4px">${fmt(sv)}${hasEntries?`<span class="cat-chevron${subOpen?' open':''}" id="schev-${subKey}" style="font-size:9px">▶</span>`:''}</span></div><div class="subcat-track"><div class="subcat-fill" style="width:${sp2}%;background:${ci.c}88"></div></div></div></div>`;
+        if(hasEntries){
+          h+=`<div id="spanel-${subKey}" style="display:${subOpen?'block':'none'};padding-left:46px;padding-bottom:4px">`;
+          subExps.sort((a,b2)=>b2.date.localeCompare(a.date)).forEach(e=>{
+            const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
+            const dt=new Date(e.date+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+            h+=`<div class="eitem" style="padding:7px 0;border-top:1px solid var(--outline-variant)" onclick="openEditExp('${e.id}')">
+              <div class="einfo"><div class="ename" style="font-size:13px">${e.d}</div><div class="emeta">${dt} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div>
+              <div class="eright"><div class="eamt" style="font-size:13px">${fmt(e.amt)}</div><div class="ewho ${wc}" style="font-size:9px">${wl}</div></div>
+            </div>`;
+          });
+          h+=`</div>`;
+        }
       });
-      if(st['__none']){const sp2=spent>0?Math.min(Math.round(st['__none']/spent*100),100):0;h+=`<div class="subcat-row"><div style="flex:1;min-width:0"><div class="subcat-bar-label"><span style="color:var(--on-surface-variant)">Other</span><span>${fmt(st['__none'])}</span></div><div class="subcat-track"><div class="subcat-fill" style="width:${sp2}%;background:${ci.c}44"></div></div></div></div>`;}
+      // "Other" uncategorised sub entries
+      if(st['__none']){
+        const sp2=spent>0?Math.min(Math.round(st['__none']/spent*100),100):0;
+        const noneExps=catExps.filter(e=>!e.subcat);
+        const noneKey='bs-'+b.cat+'-none',noneOpen=!!expandedSubcats[noneKey];
+        h+=`<div class="subcat-row" style="cursor:pointer;padding-right:4px" onclick="toggleSubcat('${noneKey}')"><div style="flex:1;min-width:0"><div class="subcat-bar-label"><span style="display:flex;align-items:center;gap:4px;color:var(--on-surface-variant)">Other<span style="font-size:9px">(${noneExps.length})</span></span><span style="display:flex;align-items:center;gap:4px">${fmt(st['__none'])}<span class="cat-chevron${noneOpen?' open':''}" id="schev-${noneKey}" style="font-size:9px">▶</span></span></div><div class="subcat-track"><div class="subcat-fill" style="width:${sp2}%;background:${ci.c}44"></div></div></div></div>`;
+        h+=`<div id="spanel-${noneKey}" style="display:${noneOpen?'block':'none'};padding-left:46px;padding-bottom:4px">`;
+        noneExps.sort((a,b2)=>b2.date.localeCompare(a.date)).forEach(e=>{
+          const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
+          const dt=new Date(e.date+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+          h+=`<div class="eitem" style="padding:7px 0;border-top:1px solid var(--outline-variant)" onclick="openEditExp('${e.id}')">
+            <div class="einfo"><div class="ename" style="font-size:13px">${e.d}</div><div class="emeta">${dt} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div>
+            <div class="eright"><div class="eamt" style="font-size:13px">${fmt(e.amt)}</div><div class="ewho ${wc}" style="font-size:9px">${wl}</div></div>
+          </div>`;
+        });
+        h+=`</div>`;
+      }
       h+=`</div>`;
     } else {
-      h+=`<div style="padding:10px 0">${labelHtml}</div>`;
+      // No subcategories — clicking expands to show individual entries directly
+      const catKey='be-'+b.cat,catEntOpen=!!expandedCats[catKey];
+      const hasEntries=catExps.length>0;
+      if(hasEntries){
+        h+=`<div class="cat-row" onclick="toggleCat('${catKey}')">
+          <span style="font-size:18px">${ci.i}</span>
+          <div class="cat-row-inner">${labelHtml}</div>
+          <span class="cat-chevron${catEntOpen?' open':''}" id="chev-${catKey}">▶</span>
+        </div>`;
+        h+=`<div class="subcat-panel${catEntOpen?' open':''}" id="panel-${catKey}" style="padding-left:46px;padding-bottom:4px">`;
+        catExps.sort((a,b2)=>b2.date.localeCompare(a.date)).forEach(e=>{
+          const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
+          const dt=new Date(e.date+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+          h+=`<div class="eitem" style="padding:7px 0;border-top:1px solid var(--outline-variant)" onclick="openEditExp('${e.id}')">
+            <div class="einfo"><div class="ename" style="font-size:13px">${e.d}</div><div class="emeta">${dt}</div></div>
+            <div class="eright"><div class="eamt" style="font-size:13px">${fmt(e.amt)}</div><div class="ewho ${wc}" style="font-size:9px">${wl}</div></div>
+          </div>`;
+        });
+        h+=`</div>`;
+      } else {
+        h+=`<div style="padding:10px 0">${labelHtml}</div>`;
+      }
     }
   });
   return h+'</div>';
+}
+
+// ── SNAPSHOT RENDERER ─────────────────────────
+function rSnapshot(){
+  const sH=stats('H'),sP=stats('P'),sS=stats('S');
+  const exps=mExps();
+  const recP=recTotal('P'),recS=recTotal('S');
+  const pExpenses=exps.reduce((a,e)=>a+e.amt*(e.sp/100),0)+recP;
+  const sExpenses=exps.reduce((a,e)=>a+e.amt*(e.ss/100),0)+recS;
+  const sc=sCalc();
+  const from=sc.net>0?D.names.S:D.names.P,to=sc.net>0?D.names.P:D.names.S;
+
+  // helper: compact stat pill
+  function pill(label,val,valColor,bg){
+    return`<div style="flex:1;background:${bg||'var(--surface-container)'};border-radius:var(--r-sm);padding:6px 8px">
+      <div style="font-size:9px;color:var(--on-surface-variant);margin-bottom:2px;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.03em">${label}</div>
+      <div style="font-size:12px;font-weight:500;font-family:'Nunito','Inter',sans-serif;color:${valColor||'var(--on-surface)'}">${val}</div>
+    </div>`;
+  }
+
+  // helper: spend progress bar
+  function spendBar(spent,total,color){
+    const pct=total>0?Math.min(Math.round(spent/total*100),100):0;
+    const over=spent>total;
+    return`<div style="height:4px;background:var(--surface-container);border-radius:var(--r-full);overflow:hidden;margin-top:6px">
+      <div style="height:100%;width:${pct}%;background:${over?'var(--error)':color};border-radius:var(--r-full);transition:width .5s"></div>
+    </div>`;
+  }
+
+  // ── ROW 1: Household ─────────────────────────
+  const hRemColor=sH.remaining>=0?'var(--primary-dark)':'var(--error)';
+  const hSpendPct=sH.ti>0?Math.round(sH.te/sH.ti*100):0;
+  let h=`<div class="card" style="padding:9px 12px 10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.07em;font-family:'Space Grotesk','Inter',sans-serif">🏠 Household</div>
+      <div style="font-size:10px;color:var(--on-surface-variant)">${MN[cm.m]} ${cm.y}</div>
+    </div>
+    <div style="display:flex;gap:5px">
+      ${pill('Inflow',fmt(sH.ti),'var(--on-surface)')}
+      ${pill('Spent',fmt(sH.te),'var(--error)','rgba(224,82,82,.07)')}
+      ${pill('Invested',fmt(sH.inv),'var(--primary-dark)','rgba(91,197,167,.07)')}
+      ${pill('Balance',fmt(sH.remaining),hRemColor,sH.remaining>=0?'rgba(91,197,167,.07)':'rgba(224,82,82,.07)')}
+    </div>
+    ${spendBar(sH.te,sH.ti,'var(--primary)')}
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--on-surface-variant);margin-top:3px">
+      <span>${hSpendPct}% spent</span>
+      <span>Inv target: ${fmt(sH.tgt)}</span>
+    </div>
+  </div>`;
+
+  // ── ROW 2: Prachi ─────────────────────────────
+  function personRow(who,label,accentColor,s,myExp){
+    const remColor=s.remaining>=0?'var(--primary-dark)':'var(--error)';
+    const savRate=s.ti>0?Math.round(s.inv/s.ti*100):0;
+    const spendPct=s.ti>0?Math.round(myExp/s.ti*100):0;
+    return`<div class="card" style="padding:9px 12px 10px;border-left:3px solid ${accentColor}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:700;color:${accentColor};font-family:'Space Grotesk','Inter',sans-serif">${label}</div>
+        <div style="font-size:14px;font-weight:500;font-family:'Nunito','Inter',sans-serif">${fmt(s.ti)}<span style="font-size:10px;color:var(--on-surface-variant);font-weight:400"> /mo</span></div>
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:6px">
+        ${pill('Spent',fmt(myExp),'var(--error)','rgba(224,82,82,.07)')}
+        ${pill('Invested',fmt(s.inv),'var(--primary-dark)','rgba(91,197,167,.07)')}
+        ${pill('Balance',fmt(s.remaining),remColor,s.remaining>=0?'rgba(91,197,167,.07)':'rgba(224,82,82,.07)')}
+      </div>
+      ${spendBar(myExp,s.ti,accentColor)}
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--on-surface-variant);margin-top:3px">
+        <span>${spendPct}% spent</span><span>${savRate}% saved</span>
+      </div>
+    </div>`;
+  }
+
+  h+=personRow('P',D.names.P,'var(--primary)',sP,pExpenses);
+  h+=personRow('S',D.names.S,'var(--secondary)',sS,sExpenses);
+
+  // ── Settlement ────────────────────────────────
+  h+=`<div class="card" style="padding:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em;font-family:'Space Grotesk','Inter',sans-serif">Settlement</div>
+        <div style="font-size:12px;color:var(--on-surface-variant);margin-bottom:4px">${from} → ${to}</div>
+        <div style="font-size:22px;font-weight:500;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(Math.abs(sc.net))}</div>
+      </div>
+      <button class="sbtn" style="width:auto;padding:10px 18px;margin:0;font-size:12px" onclick="markSettled()">Mark Settled</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:rgba(91,197,167,.06);border-radius:var(--r-sm);padding:10px;border:1px solid rgba(91,197,167,.15)">
+        <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:4px">${D.names.P}</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <div><div style="font-size:11px;color:var(--on-surface-variant)">Paid</div><div style="font-size:14px;font-family:'Nunito','Inter',sans-serif;color:var(--primary-dark)">${fmt(sc.pP)}</div></div>
+          <div style="text-align:right"><div style="font-size:11px;color:var(--on-surface-variant)">Fair share</div><div style="font-size:14px;font-family:'Nunito','Inter',sans-serif">${fmt(sc.pF)}</div></div>
+        </div>
+      </div>
+      <div style="background:rgba(61,133,204,.06);border-radius:var(--r-sm);padding:10px;border:1px solid rgba(61,133,204,.15)">
+        <div style="font-size:10px;color:var(--on-surface-variant);margin-bottom:4px">${D.names.S}</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <div><div style="font-size:11px;color:var(--on-surface-variant)">Paid</div><div style="font-size:14px;font-family:'Nunito','Inter',sans-serif;color:var(--secondary)">${fmt(sc.sP)}</div></div>
+          <div style="text-align:right"><div style="font-size:11px;color:var(--on-surface-variant)">Fair share</div><div style="font-size:14px;font-family:'Nunito','Inter',sans-serif">${fmt(sc.sF)}</div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Category split ────────────────────────────
+  const catTotals={};
+  exps.forEach(e=>{
+    if(!catTotals[e.cat])catTotals[e.cat]={P:0,S:0,total:0};
+    catTotals[e.cat].P+=e.amt*(e.sp/100);
+    catTotals[e.cat].S+=e.amt*(e.ss/100);
+    catTotals[e.cat].total+=e.amt;
+  });
+  const sortedCats=Object.entries(catTotals).sort((a,b)=>b[1].total-a[1].total).slice(0,8);
+  if(sortedCats.length){
+    h+=`<div class="card" style="padding:14px"><div class="ctitle" style="margin-bottom:12px">Category Split — ${MN[cm.m]}</div>`;
+    sortedCats.forEach(([catId,vals])=>{
+      const ci=gCat(catId);
+      const tot=Math.max(vals.total,1);
+      const pPct=Math.round(vals.P/tot*100),sPct=100-pPct;
+      h+=`<div style="margin-bottom:11px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-size:13px;display:flex;align-items:center;gap:5px">${ci.i} ${ci.n}</span>
+          <span style="font-size:11px;color:var(--on-surface-variant);font-family:'Nunito','Inter',sans-serif">${fmt(vals.total)}</span>
+        </div>
+        <div style="display:flex;height:8px;border-radius:var(--r-full);overflow:hidden;gap:1px">
+          <div style="width:${pPct}%;background:var(--primary);border-radius:3px 0 0 3px"></div>
+          <div style="width:${sPct}%;background:var(--secondary);border-radius:0 3px 3px 0"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:3px">
+          <span style="color:var(--primary-dark)">${D.names.P} ${fmt(vals.P)} (${pPct}%)</span>
+          <span style="color:var(--secondary)">${D.names.S} ${fmt(vals.S)} (${sPct}%)</span>
+        </div>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+  return h;
 }
 
 // ── INVEST RENDERER ───────────────────────────
