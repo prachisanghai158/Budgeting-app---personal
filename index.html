@@ -236,7 +236,7 @@ const fmtHero=n=>{
 };
 const uid=()=>Math.random().toString(36).slice(2,9);
 const today=()=>new Date().toISOString().split('T')[0];
-const gCat=id=>(D.categories||[]).find(c=>c.id===id)||{n:id,i:'📌',c:'#8890AA',subs:[]};
+const gCat=id=>{const c=(D.categories||[]).find(c=>c.id===id);if(!c)return{n:id,i:'📌',c:'#8890AA',subs:[]};return{...c,i:c.i||'📦',c:c.c||'#9CA3AF'};}
 const gSub=(catId,subId)=>(gCat(catId).subs||[]).find(s=>s.id===subId)||null;
 
 let view='H';
@@ -748,7 +748,7 @@ function toggleSubcat(key){
   expandedSubcats[key]=!expandedSubcats[key];
   const chev=document.getElementById('schev-'+key),panel=document.getElementById('spanel-'+key);
   if(chev)chev.classList.toggle('open',expandedSubcats[key]);
-  if(panel)panel.classList.toggle('open',expandedSubcats[key]);
+  if(panel)panel.style.display=expandedSubcats[key]?'block':'none';
 }
 
 // ── EXPENSES RENDERER ─────────────────────────
@@ -910,7 +910,7 @@ function rBudget(){
         });
         h+=`</div>`;
       } else {
-        h+=`<div style="padding:10px 0">${labelHtml}</div>`;
+        h+=`<div class="cat-row" style="cursor:default"><span style="font-size:18px">${ci.i}</span><div class="cat-row-inner">${labelHtml}</div></div>`;
       }
     }
   });
