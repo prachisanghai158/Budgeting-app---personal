@@ -238,6 +238,18 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const today=()=>new Date().toISOString().split('T')[0];
 const gCat=id=>{const c=(D.categories||[]).find(c=>c.id===id);if(!c)return{n:id,i:'📌',c:'#8890AA',subs:[]};return{...c,i:c.i||'📦',c:c.c||'#9CA3AF'};}
 const gSub=(catId,subId)=>(gCat(catId).subs||[]).find(s=>s.id===subId)||null;
+function dispName(e){
+  if(!e||!e.d)return'';
+  const words=e.d.trim().split(/\s+/);
+  if(words.length<3)return e.d;
+  const ci=gCat(e.cat);
+  const sub=e.subcat?gSub(e.cat,e.subcat):null;
+  if(!sub)return e.d;
+  const w0=words[0].toLowerCase(),w1=words[1].toLowerCase();
+  const catN=(ci.n||'').toLowerCase(),subN=(sub.n||'').toLowerCase();
+  if(w0===catN&&w1===subN)return words.slice(2).join(' ');
+  return e.d;
+}
 
 let view='H';
 let cu='P', ctab='exp', cm={y:new Date().getFullYear(),m:new Date().getMonth()};
@@ -820,7 +832,7 @@ function rExp(){
       const warnLabel=needsSubcat?'⚠ fix subcategory':'⚠ fix category';
       const warnMeta=needsSubcat?`${ci.i} ${ci.n} — <span style='color:var(--error)'>pick a subcategory</span>`:'<span style=\'color:var(--error)\'>Uncategorised — tap to fix</span>';
       const catWarn=needsFlag?`<span style="font-size:9px;padding:2px 6px;border-radius:var(--r-full);background:rgba(224,82,82,.15);color:var(--error);margin-left:4px;vertical-align:middle">${warnLabel}</span>`:'';
-      h+=`<div class="eitem" style="${rowStyle}" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${needsFlag?'rgba(224,82,82,.15)':ci.c+'18'}">${needsFlag?(needsSubcat?ci.i:'❓'):ci.i}</div><div class="einfo"><div class="ename">${e.d}${swTag}${catWarn}</div><div class="emeta">${needsFlag?warnMeta:meta+' · '+D.names.P+' '+e.sp+'% / '+D.names.S+' '+e.ss+'%'}</div></div><div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
+      h+=`<div class="eitem" style="${rowStyle}" onclick="openEditExp('${e.id}')"><div class="eicon" style="background:${needsFlag?'rgba(224,82,82,.15)':ci.c+'18'}">${needsFlag?(needsSubcat?ci.i:'❓'):ci.i}</div><div class="einfo"><div class="ename">${dispName(e)}${swTag}${catWarn}</div><div class="emeta">${needsFlag?warnMeta:meta+' · '+D.names.P+' '+e.sp+'% / '+D.names.S+' '+e.ss+'%'}</div></div><div class="eright"><div class="eamt">${fmt(myAmt)}</div><div class="ewho ${wc}">${wl}</div></div></div>`;
     });
     h+='</div>';
   });
@@ -864,7 +876,7 @@ function rBudget(){
             const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
             const dt=new Date(e.date+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
             h+=`<div class="eitem" style="padding:7px 0;border-top:1px solid var(--outline-variant)" onclick="openEditExp('${e.id}')">
-              <div class="einfo"><div class="ename" style="font-size:13px">${e.d}</div><div class="emeta">${dt} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div>
+              <div class="einfo"><div class="ename" style="font-size:13px">${dispName(e)}</div><div class="emeta">${dt} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div>
               <div class="eright"><div class="eamt" style="font-size:13px">${fmt(e.amt)}</div><div class="ewho ${wc}" style="font-size:9px">${wl}</div></div>
             </div>`;
           });
@@ -882,7 +894,7 @@ function rBudget(){
           const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
           const dt=new Date(e.date+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
           h+=`<div class="eitem" style="padding:7px 0;border-top:1px solid var(--outline-variant)" onclick="openEditExp('${e.id}')">
-            <div class="einfo"><div class="ename" style="font-size:13px">${e.d}</div><div class="emeta">${dt} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div>
+            <div class="einfo"><div class="ename" style="font-size:13px">${dispName(e)}</div><div class="emeta">${dt} · ${D.names.P} ${e.sp}% / ${D.names.S} ${e.ss}%</div></div>
             <div class="eright"><div class="eamt" style="font-size:13px">${fmt(e.amt)}</div><div class="ewho ${wc}" style="font-size:9px">${wl}</div></div>
           </div>`;
         });
@@ -904,7 +916,7 @@ function rBudget(){
           const wc=e.pb==='P'?'wp':e.pb==='S'?'ws':'wb',wl=e.pb==='P'?D.names.P:e.pb==='S'?D.names.S:'Split';
           const dt=new Date(e.date+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
           h+=`<div class="eitem" style="padding:7px 0;border-top:1px solid var(--outline-variant)" onclick="openEditExp('${e.id}')">
-            <div class="einfo"><div class="ename" style="font-size:13px">${e.d}</div><div class="emeta">${dt}</div></div>
+            <div class="einfo"><div class="ename" style="font-size:13px">${dispName(e)}</div><div class="emeta">${dt}</div></div>
             <div class="eright"><div class="eamt" style="font-size:13px">${fmt(e.amt)}</div><div class="ewho ${wc}" style="font-size:9px">${wl}</div></div>
           </div>`;
         });
